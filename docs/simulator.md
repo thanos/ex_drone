@@ -41,6 +41,30 @@ Start with a specific battery level:
 {:ok, drone} = Drone.connect(:sim, name: :low_bat, battery: 30)
 ```
 
+Battery is always reported as an integer (truncated from fractional drain):
+```elixir
+{:ok, battery} = Drone.query(drone, :battery)
+# battery is an integer, e.g., 98
+```
+
+## Flight Time Simulation
+
+The simulator tracks cumulative motor-on time in seconds, matching real Tello behavior:
+
+- Takeoff adds 3 seconds
+- Landing adds 3 seconds
+- Movement (move/rotate) adds 2 seconds
+- Flips add 2 seconds
+- Hover adds the specified seconds
+
+```elixir
+{:ok, drone} = Drone.connect(:sim, name: :test)
+Drone.connect_sdk(drone)
+Drone.takeoff(drone)
+{:ok, time} = Drone.query(drone, :time)
+# time == 3 (seconds of flight time)
+```
+
 ## Failure Injection
 
 Test error handling by injecting failures:

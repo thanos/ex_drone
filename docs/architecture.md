@@ -11,6 +11,7 @@ Drone (Public API)
   |     |
   |     +-- Drone.Safety (pure validation)
   |     +-- Drone.Telemetry (event helpers)
+  |     +-- Drone.Geometry (position math)
   |     +-- Drone.Adapter (behaviour)
   |           |
   |           +-- Drone.Adapters.Sim (in-process state machine)
@@ -53,7 +54,19 @@ User -> Drone.takeoff(drone)
 Drone.Vehicle.handle_call({:command, cmd})
        |
        v
+Emergency? -> Bypass all, send immediately to adapter
+       |
+       v
 Drone.Safety.check(cmd, policy, state)
+       |
+       +-- Validate Args -> Reject if out of Tello SDK range
+       +-- Check Mode -> Reject if not in valid state
+       +-- Check Allowlist -> Reject if not allowed
+       +-- Check Flying Requirement -> Reject if state does not match
+       +-- Check Altitude -> Reject if exceeds max
+       +-- Check Distance -> Reject if exceeds max
+       +-- Check Battery -> Reject takeoff if too low
+       +-- Check Geofence -> Reject if outside area
        |
        +-- {:error, :safety, reason} -> emit [:drone, :safety, :reject] -> return error
        |

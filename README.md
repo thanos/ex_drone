@@ -98,6 +98,7 @@ mission =
 
 - **Drone.Vehicle** -- One GenServer per drone, supervised
 - **Drone.Adapter** -- Behaviour for drone communication (Sim, Tello, future adapters)
+- **Drone.Geometry** -- Shared position math (move, rotate, flip deltas)
 - **Drone.Safety** -- Pure validation module, no side effects
 - **Drone.Telemetry** -- `:telemetry` events for observability
 - **Drone.Mission** -- Command sequence DSL

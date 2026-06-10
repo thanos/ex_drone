@@ -29,12 +29,12 @@ Drone.disconnect(drone)
 )
 ```
 
-Defaults:
+Defaults (configured in `Drone.Adapters.Tello.Connection`):
 
-- Drone IP: `192.168.10.1`
-- Drone port: `8889`
-- Local port: `8889`
-- Command timeout: `10_000` ms (10 seconds)
+- Drone IP: `192.168.10.1` (`Connection.default_drone_ip/0`)
+- Drone port: `8889` (`Connection.default_drone_port/0`)
+- Local port: `8889` (`Connection.default_local_port/0`)
+- Command timeout: `10_000` ms (`Connection.default_timeout/0`)
 
 ## Protocol
 
@@ -45,9 +45,11 @@ The Tello SDK uses plain ASCII text commands over UDP. The adapter handles:
 - Parsing Tello responses (`ok`, `error`, numeric values)
 - Command timeout handling
 
-## Testing with a Fake Server
+## Testing
 
-The test suite includes a fake UDP server for testing the Tello adapter without hardware. See `Drone.Adapters.Tello.FakeServer` in the test suite.
+The Tello adapter can be tested without hardware using the simulator or by
+directly calling the adapter functions with a simulated UDP socket. See the
+test suite in `test/drone/adapters/tello/` for examples.
 
 ## Safety
 

@@ -34,7 +34,7 @@ defmodule Drone.MixProject do
         "coveralls.json": :test,
         sobelow: :dev
       ],
-      source_url: "https://github.com/user/ex_drone",
+      source_url: "https://github.com/thanos/ex_drone",
       package: package(),
       description: "BEAM-native drone control for Elixir and Erlang."
     ]

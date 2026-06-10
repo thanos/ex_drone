@@ -58,6 +58,13 @@ Drone.Safety.Policy.new(
 - `Drone.Safety.Policy.indoor()` -- Indoor defaults (2m altitude, 5m distance)
 - `Drone.Safety.Policy.unrestricted()` -- No limits (use with caution)
 
+You can also pass a `%Policy{}` struct directly to `Drone.connect/2`:
+
+```elixir
+policy = Drone.Safety.Policy.new(max_altitude_cm: 250, indoor: true)
+{:ok, drone} = Drone.connect(:sim, name: :custom, safety: policy)
+```
+
 ## Emergency Commands
 
 Emergency commands always bypass the safety pipeline:
