@@ -132,14 +132,17 @@ Public API, supervised processes, safety pipeline, simulator, Tello adapter, mis
 - [x] CI/CD — lint, test matrix (1.17-1.20 / OTP 26-29), coverage (90.2%), sobelow, dialyzer, docs, Hex.pm publish
 - [x] 253 tests, 90.2% coverage, credo --strict clean, --warnings-as-errors clean
 
-### v0.2.0 — Async Missions & Retry
+### v0.2.0 — Adapters & Resilience
 
-Command retry with exponential backoff, async mission execution, and improved error recovery.
+New hardware adapters, command retry, async missions, and reconnect.
 
+- [ ] `Drone.Adapters.Crazyflie` — Crazyflie BLE/USB adapter
+- [ ] `Drone.Adapters.MAVLink` — MAVLink-compatible drones via serial/UDP
+- [ ] Adapter registry — `Drone.Adapter.register/2` for third-party adapters
+- [ ] Common adapter test suite — shared `Drone.Adapter.Acceptance` tests
 - [ ] Command retry with configurable backoff (`safe_to_retry?/1` already in `Drone.Command`)
 - [ ] `Mission.run_async/2` — fire-and-forget mission execution with progress events
-- [ ] `Mission.run_stream/2` — streamed results via `GenStage` or `Stream`
-- [ ] Reconnect on adapter failure — Vehicle auto-reconnects to Tello after network errors
+- [ ] Reconnect on adapter failure — Vehicle auto-reconnects after network errors
 - [ ] `Drone.Adapters.Tello` — state recovery on reconnect (re-query SDK mode, battery, position)
 - [ ] Configurable command timeout per-vehicle (default 10s)
 
@@ -148,7 +151,7 @@ Command retry with exponential backoff, async mission execution, and improved er
 Swarm primitives for coordinating multiple drones.
 
 - [ ] `Drone.Swarm` — supervised group of drones with shared mission context
-- [ ] Formation flying —grid, line, circle— via relative position commands
+- [ ] Formation flying — grid, line, circle — via relative position commands
 - [ ] `Drone.Mission.concurrent/2` — run missions on multiple drones in parallel
 - [ ] Collision avoidance in simulator — safety policy rejects commands that would collide
 - [ ] Coordinated takeoff/land — swarm-level commands that dispatch to individual drones
@@ -163,23 +166,20 @@ Video stream handling and real-time sensor data from Tello EDU.
 - [ ] Video frame extraction — decode keyframes to JPEG for snapshot API
 - [ ] `Drone.query(:wifi_signal)` — WiFi signal quality from state stream
 
-### v0.5.0 — New Adapters & Protocol Extensions
+### v0.5.0 — Persistence & Analytics
 
-Additional hardware support beyond Tello.
+Flight logging, replay, and observability.
 
-- [ ] `Drone.Adapters.Crazyflie` — Crazyflie BLE/USB adapter
-- [ ] `Drone.Adapters.MAVLink` — MAVLink-compatible drones via serial/UDP
-- [ ] `Drone.Adapters.PX4` — PX4 SITL integration for simulation at scale
-- [ ] Adapter registry — `Drone.Adapter.register/2` for third-party adapters
-- [ ] Common adapter test suite — shared `Drone.Adapter.Acceptance` tests
+- [ ] Ecto-backed persistence — mission logs, flight history, anomaly tracking
+- [ ] Mission replay — replay a recorded mission against a simulator for regression testing
+- [ ] `:telemetry` analytics dashboard — LiveDashboard plugin with real-time charts
+- [ ] Flight log query API — filter by drone, date, safety rejections, battery level
 
 ### v1.0.0 — Stable API
 
-API freeze, production hardening, and enterprise features.
+API freeze, production hardening, and deployment guides.
 
 - [ ] API stability guarantee — no breaking changes within 1.x
-- [ ] `:telemetry` analytics dashboard integration (LiveDashboard plugin)
-- [ ] Ecto-backed persistence — mission logs, flight history, anomaly tracking
 - [ ] Fly.io deployment guide — run command relay in the cloud
 - [ ] Nerves integration guide — run on Raspberry Pi with Tello
 - [ ] Comprehensive property-based testing (`StreamData`)
