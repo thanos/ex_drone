@@ -11,6 +11,11 @@ defmodule Drone.Adapters.Tello.Connection do
   @default_local_port 8889
   @default_timeout 10_000
 
+  def default_drone_ip, do: @default_drone_ip
+  def default_drone_port, do: @default_drone_port
+  def default_local_port, do: @default_local_port
+  def default_timeout, do: @default_timeout
+
   @spec open(keyword()) :: {:ok, port()} | {:error, term()}
   def open(opts \\ []) do
     local_port = Keyword.get(opts, :local_port, @default_local_port)

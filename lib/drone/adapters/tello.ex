@@ -74,10 +74,10 @@ defmodule Drone.Adapters.Tello do
 
   @impl Drone.Adapter
   def connect(opts) do
-    ip = Keyword.get(opts, :drone_ip, {192, 168, 10, 1})
-    port = Keyword.get(opts, :drone_port, 8889)
-    local_port = Keyword.get(opts, :local_port, 8889)
-    timeout = Keyword.get(opts, :timeout, 10_000)
+    ip = Keyword.get(opts, :drone_ip, Connection.default_drone_ip())
+    port = Keyword.get(opts, :drone_port, Connection.default_drone_port())
+    local_port = Keyword.get(opts, :local_port, Connection.default_local_port())
+    timeout = Keyword.get(opts, :timeout, Connection.default_timeout())
 
     case Connection.open(local_port: local_port) do
       {:ok, socket} ->

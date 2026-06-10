@@ -10,6 +10,7 @@ defmodule Drone.Adapters.Sim.State do
           battery: number(),
           speed: integer(),
           mode: :idle | :sdk_mode | :flying | :emergency,
+          flight_time_seconds: non_neg_integer(),
           last_command: Drone.Command.t() | nil,
           command_history: [Drone.Command.t()],
           config: map()
@@ -23,6 +24,7 @@ defmodule Drone.Adapters.Sim.State do
             battery: 100,
             speed: 0,
             mode: :idle,
+            flight_time_seconds: 0,
             last_command: nil,
             command_history: [],
             config: %{
@@ -59,5 +61,14 @@ defmodule Drone.Adapters.Sim.State do
   @spec push_command(t(), Drone.Command.t()) :: t()
   def push_command(%__MODULE__{command_history: history} = state, cmd) do
     %{state | last_command: cmd, command_history: [cmd | history]}
+  end
+
+  @doc """
+  Increments the flight time by the given number of seconds.
+  Used to simulate time elapsed during command execution.
+  """
+  @spec add_flight_time(t(), non_neg_integer()) :: t()
+  def add_flight_time(%__MODULE__{flight_time_seconds: t} = state, seconds) do
+    %{state | flight_time_seconds: t + seconds}
   end
 end

@@ -177,6 +177,13 @@ defmodule Drone.PublicAPITest do
       assert {:error, :not_connected} = Drone.emergency(:nonexistent_drone)
       assert {:error, :not_connected} = Drone.disconnect(:nonexistent_drone)
     end
+
+    test "passing a pid returns {:error, :not_connected} (pids are not supported handles)" do
+      # The @type drone is atom(), not pid(). If a user tries to use a pid
+      # (e.g., from whereis), it should gracefully return :not_connected.
+      fake_pid = spawn(fn -> :ok end)
+      assert {:error, :not_connected} = Drone.takeoff(fake_pid)
+    end
   end
 
   describe "command range validation" do

@@ -124,6 +124,7 @@ defmodule Drone.Adapters.Sim do
       %{state | z: 30, flying: true, mode: :flying, speed: 0}
       |> State.push_command(Command.takeoff())
       |> State.drain_battery(state.config.battery_drain_per_takeoff)
+      |> State.add_flight_time(3)
 
     {:ok, :ok, new_state}
   end
@@ -133,6 +134,7 @@ defmodule Drone.Adapters.Sim do
       %{state | z: 0, flying: false, mode: :sdk_mode, speed: 0}
       |> State.push_command(Command.land())
       |> State.drain_battery(state.config.battery_drain_per_land)
+      |> State.add_flight_time(3)
 
     {:ok, :ok, new_state}
   end
@@ -146,6 +148,7 @@ defmodule Drone.Adapters.Sim do
       %{state | x: state.x + dx, y: state.y + dy, z: max(0, state.z + dz)}
       |> State.push_command(Command.move(direction, distance))
       |> State.drain_battery(state.config.battery_drain_per_move)
+      |> State.add_flight_time(2)
 
     {:ok, :ok, new_state}
   end
@@ -159,6 +162,7 @@ defmodule Drone.Adapters.Sim do
       %{state | yaw: new_yaw}
       |> State.push_command(Command.rotate(direction, degrees))
       |> State.drain_battery(state.config.battery_drain_per_move)
+      |> State.add_flight_time(2)
 
     {:ok, :ok, new_state}
   end
@@ -171,13 +175,19 @@ defmodule Drone.Adapters.Sim do
       %{state | x: state.x + dx, y: state.y + dy}
       |> State.push_command(Command.flip(direction))
       |> State.drain_battery(state.config.battery_drain_per_move)
+      |> State.add_flight_time(2)
 
     {:ok, :ok, new_state}
   end
 
   defp execute(%State{} = state, %Command{type: :hover, args: args}) do
     seconds = Keyword.get(args, :seconds, 1)
-    new_state = State.push_command(state, Command.hover(seconds))
+
+    new_state =
+      state
+      |> State.push_command(Command.hover(seconds))
+      |> State.add_flight_time(seconds)
+
     {:ok, :ok, new_state}
   end
 
@@ -200,7 +210,7 @@ defmodule Drone.Adapters.Sim do
         :battery -> trunc(state.battery)
         :height -> state.z
         :speed -> state.speed
-        :time -> length(state.command_history)
+        :time -> state.flight_time_seconds
         :wifi -> "sim_wifi"
         :sdk_version -> "sim_1.0"
         :serial_number -> "SIM001"

@@ -44,7 +44,7 @@ defmodule Drone do
 
   alias Drone.{Command, Vehicle}
 
-  @type drone :: atom() | pid()
+  @type drone :: atom()
   @type connect_result :: {:ok, atom()} | {:error, term()}
 
   @doc """

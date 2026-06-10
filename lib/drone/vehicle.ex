@@ -14,6 +14,19 @@ defmodule Drone.Vehicle do
 
   alias Drone.{Adapter, Command, Geometry, Safety, Safety.Policy, Telemetry}
 
+  @default_vehicle_state %{
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    battery: 100,
+    speed: 0,
+    flying: false,
+    mode: :idle,
+    last_command: nil,
+    command_history: []
+  }
+
   @type state :: %{
           name: atom(),
           adapter_module: module(),
@@ -38,23 +51,12 @@ defmodule Drone.Vehicle do
     :adapter_module,
     :adapter_state,
     :safety_policy,
-    vehicle_state: %{
-      x: 0,
-      y: 0,
-      z: 0,
-      yaw: 0,
-      battery: 100,
-      speed: 0,
-      flying: false,
-      mode: :idle,
-      last_command: nil,
-      command_history: []
-    }
+    vehicle_state: @default_vehicle_state
   ]
 
   def child_spec(opts) do
     %{
-      id: Keyword.get(opts, :name, __MODULE__),
+      id: __MODULE__,
       start: {__MODULE__, :start_link, [opts]},
       restart: :temporary
     }
@@ -264,23 +266,8 @@ defmodule Drone.Vehicle do
         }
 
       {:error, _, _} ->
-        default_vehicle_state()
+        @default_vehicle_state
     end
-  end
-
-  defp default_vehicle_state do
-    %{
-      x: 0,
-      y: 0,
-      z: 0,
-      yaw: 0,
-      battery: 100,
-      speed: 0,
-      flying: false,
-      mode: :idle,
-      last_command: nil,
-      command_history: []
-    }
   end
 
   defp update_vehicle_state(vehicle_state, %Command{type: :sdk_mode}, _reply) do
