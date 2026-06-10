@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  statuses: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -101,12 +105,14 @@ jobs:
             ${{ runner.os }}-mix-
       - name: Install dependencies
         run: mix deps.get
-      - name: Run coverage and push to Coveralls
+      - name: Compile
+        run: mix compile
+      - name: Push coverage to Coveralls
         env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
-        run: mix coveralls.github || true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mix coveralls.github
       - name: Check coverage threshold (70%)
-        run: mix coveralls
+        run: mix coveralls --min-coverage 70
 
   security:
     name: Security
