@@ -33,12 +33,21 @@ defmodule Drone.SupervisorTest do
       name = :"sup_stop_#{System.unique_integer([:positive])}"
       opts = [name: name, adapter: :sim]
 
-      {:ok, pid} = Supervisor.start_vehicle(opts)
+      {:ok, _pid} = Supervisor.start_vehicle(opts)
       assert :ok = Supervisor.stop_vehicle(name)
-      # Wait for process to actually terminate
-      ref = Process.monitor(pid)
-      assert_receive {:DOWN, ^ref, :process, ^pid, _}, 1000
-      assert Vehicle.whereis(name) == nil
+      # Registry cleanup is async — poll until name is unregistered
+      assert eventually(fn -> Vehicle.whereis(name) == nil end)
+    end
+
+    defp eventually(fun, attempts \\ 50, delay \\ 10)
+    defp eventually(_fun, 0, _delay), do: false
+    defp eventually(fun, attempts, delay) do
+      if fun.() do
+        true
+      else
+        Process.sleep(delay)
+        eventually(fun, attempts - 1, delay)
+      end
     end
 
     test "returns error when vehicle not found" do
