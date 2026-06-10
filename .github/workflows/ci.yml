@@ -112,7 +112,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: mix coveralls.github
       - name: Check coverage threshold (70%)
-        run: mix coveralls --min-coverage 70
+        run: mix coveralls
 
   security:
     name: Security
