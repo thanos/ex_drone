@@ -208,8 +208,6 @@ defmodule Drone.Adapters.Tello do
     end
   end
 
-  defp update_state(%__MODULE__{} = state, _cmd), do: state
-
   defp move_delta(:up, distance, _yaw), do: {0, 0, distance}
   defp move_delta(:down, distance, _yaw), do: {0, 0, -distance}
   defp move_delta(:forward, distance, yaw), do: forward_delta(distance, yaw)

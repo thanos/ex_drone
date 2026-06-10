@@ -85,7 +85,6 @@ defmodule Drone.Safety do
   defp validate_mode(_cmd, %{mode: :sdk_mode}), do: :ok
   defp validate_mode(_cmd, %{mode: :flying}), do: :ok
 
-  defp validate_allowlist(%Command{type: :emergency}, _policy), do: :ok
   defp validate_allowlist(%Command{type: :sdk_mode}, _policy), do: :ok
   defp validate_allowlist(%Command{}, %Policy{allowlist: nil}), do: :ok
 

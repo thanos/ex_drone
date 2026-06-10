@@ -107,7 +107,6 @@ defmodule Drone.Adapters.Sim do
 
   defp check_mode(%State{mode: :idle}, %Command{type: :sdk_mode}), do: :ok
   defp check_mode(%State{mode: :idle}, _cmd), do: {:error, :not_in_sdk_mode}
-  defp check_mode(%State{mode: :emergency}, %Command{type: :emergency}), do: :ok
   defp check_mode(%State{mode: :emergency}, _cmd), do: {:error, :emergency_active}
   defp check_mode(%State{mode: :sdk_mode}, %Command{type: :takeoff}), do: :ok
   defp check_mode(%State{mode: :sdk_mode}, %Command{type: :query}), do: :ok
