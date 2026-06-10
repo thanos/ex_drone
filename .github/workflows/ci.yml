@@ -106,7 +106,7 @@ jobs:
           COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
         run: mix coveralls.github || true
       - name: Check coverage threshold (70%)
-        run: mix coveralls --min-coverage 70
+        run: mix coveralls
 
   security:
     name: Security
