@@ -41,6 +41,7 @@ defmodule Drone.SupervisorTest do
 
     defp eventually(fun, attempts \\ 50, delay \\ 10)
     defp eventually(_fun, 0, _delay), do: false
+
     defp eventually(fun, attempts, delay) do
       if fun.() do
         true
