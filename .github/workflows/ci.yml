@@ -171,20 +171,20 @@ jobs:
           name: docs
           path: doc/
 
-  release:
-    name: Release to Hex.pm
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [lint, test, coverage, security, dialyzer, docs]
-    runs-on: ubuntu-latest
-    env:
-      HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: erlef/setup-beam@v1
-        with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
-      - name: Install dependencies
-        run: mix deps.get
-      - name: Publish to Hex.pm
-        run: mix hex.publish --yes
+  # release:
+  #   name: Release to Hex.pm
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   needs: [lint, test, coverage, security, dialyzer, docs]
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: erlef/setup-beam@v1
+  #       with:
+  #         elixir-version: ${{ env.ELIXIR_VERSION }}
+  #         otp-version: ${{ env.OTP_VERSION }}
+  #     - name: Install dependencies
+  #       run: mix deps.get
+  #     - name: Publish to Hex.pm
+  #       run: mix hex.publish --yes
