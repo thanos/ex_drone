@@ -1,6 +1,7 @@
 defmodule Drone.VehicleTest do
   use ExUnit.Case, async: false
 
+  alias Drone.Safety.Policy
   alias Drone.Vehicle
 
   describe "connect and lifecycle" do
@@ -15,6 +16,15 @@ defmodule Drone.VehicleTest do
       assert {:ok, ^name} = Drone.connect(:sim, name: name, safety: [indoor: true])
       policy = GenServer.call(Vehicle.whereis(name), :get_policy)
       assert policy.indoor == true
+    end
+
+    test "connects with a Policy struct as the safety option" do
+      name = :"vehicle_policy_struct_#{System.unique_integer([:positive])}"
+      policy = Policy.new(max_altitude_cm: 250, indoor: true)
+      assert {:ok, ^name} = Drone.connect(:sim, name: name, safety: policy)
+      stored = GenServer.call(Vehicle.whereis(name), :get_policy)
+      assert stored == policy
+      assert stored.max_altitude_cm == 250
     end
 
     test "rejects duplicate names" do
@@ -102,6 +112,44 @@ defmodule Drone.VehicleTest do
       {:ok, ^name} = Drone.connect(:sim, name: name)
       assert is_pid(Vehicle.whereis(name))
       assert :ok = Drone.disconnect(name)
+    end
+
+    test "calls adapter disconnect exactly once" do
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+      name = :"disconnect_once_#{System.unique_integer([:positive])}"
+
+      {:ok, ^name} =
+        Drone.connect(Drone.Adapters.CountingAdapter, name: name, counter: counter)
+
+      pid = Vehicle.whereis(name)
+      ref = Process.monitor(pid)
+
+      :ok = Drone.disconnect(name)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :normal}
+
+      assert Agent.get(counter, & &1) == 1
+      Agent.stop(counter)
+    end
+
+    test "emits a disconnect telemetry event on termination" do
+      handler = :"disconnect_tele_#{System.unique_integer([:positive])}"
+      test_pid = self()
+
+      :telemetry.attach(
+        handler,
+        [:drone, :disconnect],
+        fn _event, _measurements, metadata, _config ->
+          send(test_pid, {:disconnected, metadata})
+        end,
+        nil
+      )
+
+      name = :"disconnect_tele_drone_#{System.unique_integer([:positive])}"
+      {:ok, ^name} = Drone.connect(:sim, name: name)
+      :ok = Drone.disconnect(name)
+
+      assert_receive {:disconnected, %{adapter: :sim, name: ^name}}
+      :telemetry.detach(handler)
     end
   end
 end

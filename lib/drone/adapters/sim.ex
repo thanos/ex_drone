@@ -38,7 +38,7 @@ defmodule Drone.Adapters.Sim do
 
   @behaviour Drone.Adapter
 
-  alias Drone.{Adapters.Sim.State, Command}
+  alias Drone.{Adapters.Sim.State, Command, Geometry}
 
   @impl Drone.Adapter
   def connect(opts) do
@@ -140,7 +140,7 @@ defmodule Drone.Adapters.Sim do
   defp execute(%State{} = state, %Command{type: :move, args: args}) do
     direction = Keyword.fetch!(args, :direction)
     distance = Keyword.fetch!(args, :distance)
-    {dx, dy, dz} = move_delta(direction, distance, state.yaw)
+    {dx, dy, dz} = Geometry.move_delta(direction, distance, state.yaw)
 
     new_state =
       %{state | x: state.x + dx, y: state.y + dy, z: max(0, state.z + dz)}
@@ -153,12 +153,7 @@ defmodule Drone.Adapters.Sim do
   defp execute(%State{} = state, %Command{type: :rotate, args: args}) do
     direction = Keyword.fetch!(args, :direction)
     degrees = Keyword.fetch!(args, :degrees)
-
-    new_yaw =
-      case direction do
-        :cw -> rem(state.yaw + degrees, 360)
-        :ccw -> rem(state.yaw - degrees + 360, 360)
-      end
+    new_yaw = Geometry.rotate_yaw(direction, state.yaw, degrees)
 
     new_state =
       %{state | yaw: new_yaw}
@@ -170,14 +165,7 @@ defmodule Drone.Adapters.Sim do
 
   defp execute(%State{} = state, %Command{type: :flip, args: args}) do
     direction = Keyword.fetch!(args, :direction)
-
-    {dx, dy} =
-      case direction do
-        :left -> {-20, 0}
-        :right -> {20, 0}
-        :forward -> {0, 20}
-        :back -> {0, -20}
-      end
+    {dx, dy} = Geometry.flip_delta(direction)
 
     new_state =
       %{state | x: state.x + dx, y: state.y + dy}
@@ -224,22 +212,5 @@ defmodule Drone.Adapters.Sim do
       |> State.drain_battery(state.config.battery_drain_per_query)
 
     {:ok, value, new_state}
-  end
-
-  defp move_delta(:up, distance, _yaw), do: {0, 0, distance}
-  defp move_delta(:down, distance, _yaw), do: {0, 0, -distance}
-  defp move_delta(:forward, distance, yaw), do: forward_delta(distance, yaw)
-  defp move_delta(:back, distance, yaw), do: forward_delta(-distance, yaw)
-  defp move_delta(:left, distance, yaw), do: right_delta(-distance, yaw)
-  defp move_delta(:right, distance, yaw), do: right_delta(distance, yaw)
-
-  defp forward_delta(distance, yaw) do
-    radians = yaw * :math.pi() / 180
-    {trunc(distance * :math.sin(radians)), trunc(distance * :math.cos(radians)), 0}
-  end
-
-  defp right_delta(distance, yaw) do
-    radians = yaw * :math.pi() / 180
-    {trunc(distance * :math.cos(radians)), trunc(-distance * :math.sin(radians)), 0}
   end
 end

@@ -58,5 +58,17 @@ defmodule Drone.Safety.PolicyTest do
       policy = Policy.new(geofence: geofence)
       assert policy.geofence == geofence
     end
+
+    test "applies unrestricted preset" do
+      policy = Policy.new(unrestricted: true)
+      assert policy.max_altitude_cm == nil
+      assert policy.max_distance_cm == nil
+      assert policy.min_battery_percent == 0
+    end
+
+    test "unrestricted preset takes precedence over indoor" do
+      policy = Policy.new(unrestricted: true, indoor: true)
+      assert policy.max_altitude_cm == nil
+    end
   end
 end

@@ -20,6 +20,15 @@ defmodule Drone.Adapters.Tello.ParserTest do
       assert {:ok, 75} = Parser.parse("75")
     end
 
+    test "parses negative numeric response" do
+      assert {:ok, -45} = Parser.parse("-45")
+      assert {:ok, -100} = Parser.parse("-100\r\n")
+    end
+
+    test "parses composite/IMU response as a string" do
+      assert {:ok, "12;34;56"} = Parser.parse("12;34;56")
+    end
+
     test "parses string response" do
       assert {:ok, "192.168.10.1"} = Parser.parse("192.168.10.1")
     end

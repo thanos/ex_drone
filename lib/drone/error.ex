@@ -14,11 +14,16 @@ defmodule Drone.Error do
           | :not_in_sdk_mode
           | :not_flying
           | :already_flying
+          | :emergency_active
           | :max_altitude
           | :max_distance
           | :low_battery
           | :geofence_violation
           | :dangerous_without_prop_guards
+          | :invalid_distance
+          | :invalid_degrees
+          | :invalid_speed
+          | :invalid_seconds
 
   @type adapter_reason ::
           :timeout

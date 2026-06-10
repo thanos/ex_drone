@@ -12,7 +12,7 @@ defmodule Drone.Vehicle do
 
   use GenServer
 
-  alias Drone.{Adapter, Command, Safety, Safety.Policy, Telemetry}
+  alias Drone.{Adapter, Command, Geometry, Safety, Safety.Policy, Telemetry}
 
   @type state :: %{
           name: atom(),
@@ -98,7 +98,7 @@ defmodule Drone.Vehicle do
   @impl GenServer
   def terminate(_reason, %__MODULE__{adapter_module: mod, adapter_state: as} = state) do
     try do
-      Telemetry.emit_disconnect(mod, state.name)
+      Telemetry.emit_disconnect(adapter_key_from_module(mod), state.name)
       mod.disconnect(as)
     rescue
       _ -> :ok
@@ -222,7 +222,7 @@ defmodule Drone.Vehicle do
 
     case adapter_module.connect(adapter_opts) do
       {:ok, adapter_state} ->
-        safety_policy = Policy.new(safety_opts)
+        safety_policy = build_policy(safety_opts)
         initial_vehicle_state = fetch_initial_vehicle_state(adapter_module, adapter_state)
 
         state = %__MODULE__{
@@ -241,6 +241,11 @@ defmodule Drone.Vehicle do
         {:stop, reason}
     end
   end
+
+  # The :safety option accepts either a keyword list (built into a policy via
+  # Policy.new/1) or an already-constructed %Policy{} struct.
+  defp build_policy(%Policy{} = policy), do: policy
+  defp build_policy(opts) when is_list(opts), do: Policy.new(opts)
 
   defp fetch_initial_vehicle_state(adapter_module, adapter_state) do
     case adapter_module.telemetry(adapter_state) do
@@ -297,7 +302,7 @@ defmodule Drone.Vehicle do
   defp update_vehicle_state(vehicle_state, %Command{type: :move, args: args} = cmd, _reply) do
     direction = Keyword.fetch!(args, :direction)
     distance = Keyword.fetch!(args, :distance)
-    {dx, dy, dz} = move_delta(direction, distance, vehicle_state.yaw)
+    {dx, dy, dz} = Geometry.move_delta(direction, distance, vehicle_state.yaw)
 
     vehicle_state
     |> Map.merge(%{
@@ -311,12 +316,7 @@ defmodule Drone.Vehicle do
   defp update_vehicle_state(vehicle_state, %Command{type: :rotate, args: args} = cmd, _reply) do
     direction = Keyword.fetch!(args, :direction)
     degrees = Keyword.fetch!(args, :degrees)
-
-    new_yaw =
-      case direction do
-        :cw -> rem(vehicle_state.yaw + degrees, 360)
-        :ccw -> rem(vehicle_state.yaw - degrees + 360, 360)
-      end
+    new_yaw = Geometry.rotate_yaw(direction, vehicle_state.yaw, degrees)
 
     %{vehicle_state | yaw: new_yaw}
     |> add_to_history(cmd)
@@ -324,14 +324,7 @@ defmodule Drone.Vehicle do
 
   defp update_vehicle_state(vehicle_state, %Command{type: :flip, args: args} = cmd, _reply) do
     direction = Keyword.fetch!(args, :direction)
-
-    {dx, dy} =
-      case direction do
-        :left -> {-20, 0}
-        :right -> {20, 0}
-        :forward -> {0, 20}
-        :back -> {0, -20}
-      end
+    {dx, dy} = Geometry.flip_delta(direction)
 
     %{vehicle_state | x: vehicle_state.x + dx, y: vehicle_state.y + dy}
     |> add_to_history(cmd)
@@ -368,23 +361,6 @@ defmodule Drone.Vehicle do
 
   defp add_to_history(vehicle_state, cmd) do
     %{vehicle_state | last_command: cmd, command_history: [cmd | vehicle_state.command_history]}
-  end
-
-  defp move_delta(:up, distance, _yaw), do: {0, 0, distance}
-  defp move_delta(:down, distance, _yaw), do: {0, 0, -distance}
-  defp move_delta(:forward, distance, yaw), do: forward_delta(distance, yaw)
-  defp move_delta(:back, distance, yaw), do: forward_delta(-distance, yaw)
-  defp move_delta(:left, distance, yaw), do: right_delta(-distance, yaw)
-  defp move_delta(:right, distance, yaw), do: right_delta(distance, yaw)
-
-  defp forward_delta(distance, yaw) do
-    radians = yaw * :math.pi() / 180
-    {trunc(distance * :math.sin(radians)), trunc(distance * :math.cos(radians)), 0}
-  end
-
-  defp right_delta(distance, yaw) do
-    radians = yaw * :math.pi() / 180
-    {trunc(distance * :math.cos(radians)), trunc(-distance * :math.sin(radians)), 0}
   end
 
   defp adapter_key_from_module(Drone.Adapters.Sim), do: :sim

@@ -236,6 +236,53 @@ defmodule Drone.SafetyTest do
     end
   end
 
+  describe "command argument validation" do
+    test "rejects move distance below 20 cm" do
+      assert {:error, :safety, :invalid_distance} =
+               Safety.check(Command.move(:up, 19), Policy.default(), @flying_state)
+    end
+
+    test "rejects move distance above 500 cm" do
+      assert {:error, :safety, :invalid_distance} =
+               Safety.check(Command.move(:up, 501), Policy.default(), @flying_state)
+    end
+
+    test "accepts move distance at the boundaries" do
+      assert {:ok, _} = Safety.check(Command.move(:up, 20), Policy.default(), @flying_state)
+      assert {:ok, _} = Safety.check(Command.move(:forward, 500), Policy.default(), @flying_state)
+    end
+
+    test "rejects rotate degrees below 1" do
+      assert {:error, :safety, :invalid_degrees} =
+               Safety.check(Command.rotate(:cw, 0), Policy.default(), @flying_state)
+    end
+
+    test "rejects rotate degrees above 3600" do
+      assert {:error, :safety, :invalid_degrees} =
+               Safety.check(Command.rotate(:cw, 3601), Policy.default(), @flying_state)
+    end
+
+    test "rejects speed below 10 cm/s" do
+      assert {:error, :safety, :invalid_speed} =
+               Safety.check(Command.speed(9), Policy.default(), @flying_state)
+    end
+
+    test "rejects speed above 100 cm/s" do
+      assert {:error, :safety, :invalid_speed} =
+               Safety.check(Command.speed(101), Policy.default(), @flying_state)
+    end
+
+    test "rejects non-positive hover seconds" do
+      assert {:error, :safety, :invalid_seconds} =
+               Safety.check(Command.hover(0), Policy.default(), @flying_state)
+    end
+
+    test "emergency bypasses argument validation" do
+      assert {:ok, %Command{type: :emergency}} =
+               Safety.check(Command.emergency(), Policy.default(), @flying_state)
+    end
+  end
+
   describe "geofence" do
     test "rejects movement that would leave geofence" do
       geofence = Geofence.radius(100)

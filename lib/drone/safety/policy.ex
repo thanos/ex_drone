@@ -14,10 +14,13 @@ defmodule Drone.Safety.Policy do
 
   ## Example
 
-  Safety options are passed as a keyword list to `Drone.connect/2` and are
-  used to build a policy via `new/1`:
+  Safety options can be passed to `Drone.connect/2` either as a keyword list
+  (built into a policy via `new/1`) or as an already-constructed `%Policy{}`:
 
       {:ok, drone} = Drone.connect(:sim, name: :test, safety: [max_altitude_cm: 200, indoor: true])
+
+      policy = Drone.Safety.Policy.new(max_altitude_cm: 200, indoor: true)
+      {:ok, drone} = Drone.connect(:sim, name: :test, safety: policy)
   """
 
   @type t :: %__MODULE__{
@@ -56,14 +59,15 @@ defmodule Drone.Safety.Policy do
     - `:allowlist` -- list of allowed command types, or nil for all (default: nil)
     - `:dry_run` -- if true, commands pass safety but are not sent (default: false)
     - `:indoor` -- if true, applies indoor preset limits (default: false)
+    - `:unrestricted` -- if true, applies the unrestricted preset (no limits)
     - `:prop_guards` -- whether prop guards are installed (default: false)
     - `:geofence` -- a geofence to restrict flight area (default: nil)
   """
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
-    base = if Keyword.get(opts, :indoor, false), do: indoor(), else: default()
+    base = base_preset(opts)
 
-    policy = %__MODULE__{
+    %__MODULE__{
       max_altitude_cm: Keyword.get(opts, :max_altitude_cm, base.max_altitude_cm),
       max_distance_cm: Keyword.get(opts, :max_distance_cm, base.max_distance_cm),
       min_battery_percent: Keyword.get(opts, :min_battery_percent, base.min_battery_percent),
@@ -75,8 +79,14 @@ defmodule Drone.Safety.Policy do
       prop_guards: Keyword.get(opts, :prop_guards, base.prop_guards),
       geofence: Keyword.get(opts, :geofence, base.geofence)
     }
+  end
 
-    policy
+  defp base_preset(opts) do
+    cond do
+      Keyword.get(opts, :unrestricted, false) -> unrestricted()
+      Keyword.get(opts, :indoor, false) -> indoor()
+      true -> default()
+    end
   end
 
   @doc """

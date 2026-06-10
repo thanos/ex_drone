@@ -26,6 +26,48 @@ defmodule Drone.PublicAPITest do
       :ok = Drone.land(name)
       :ok = Drone.disconnect(name)
     end
+
+    test "updates tracked position (altitude and forward distance)" do
+      name = :"move_state_#{System.unique_integer([:positive])}"
+      {:ok, ^name} = Drone.connect(:sim, name: name)
+      Drone.connect_sdk(name)
+      :ok = Drone.takeoff(name)
+
+      # Takeoff sets z to 30.
+      {:ok, after_takeoff} = Drone.telemetry(name)
+      assert after_takeoff.z == 30
+      assert after_takeoff.y == 0
+
+      # At yaw 0, forward moves +y; up moves +z.
+      :ok = Drone.move(name, :forward, 100)
+      :ok = Drone.move(name, :up, 40)
+
+      {:ok, after_moves} = Drone.telemetry(name)
+      assert after_moves.y == 100
+      assert after_moves.z == 70
+
+      :ok = Drone.land(name)
+      :ok = Drone.disconnect(name)
+    end
+
+    test "rotation changes the heading used for subsequent moves" do
+      name = :"move_rot_#{System.unique_integer([:positive])}"
+      {:ok, ^name} = Drone.connect(:sim, name: name)
+      Drone.connect_sdk(name)
+      :ok = Drone.takeoff(name)
+
+      # Rotate 90 cw, then forward should move along +x instead of +y.
+      :ok = Drone.rotate(name, :cw, 90)
+      :ok = Drone.move(name, :forward, 100)
+
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.yaw == 90
+      assert telemetry.x == 100
+      assert telemetry.y == 0
+
+      :ok = Drone.land(name)
+      :ok = Drone.disconnect(name)
+    end
   end
 
   describe "rotate/3" do
@@ -120,6 +162,33 @@ defmodule Drone.PublicAPITest do
       :ok = Drone.takeoff(name)
 
       assert {:ok, _} = Drone.query(name, :height)
+
+      :ok = Drone.land(name)
+      :ok = Drone.disconnect(name)
+    end
+  end
+
+  describe "unknown drone" do
+    test "commands return {:error, :not_connected} instead of crashing" do
+      assert {:error, :not_connected} = Drone.takeoff(:nonexistent_drone)
+      assert {:error, :not_connected} = Drone.move(:nonexistent_drone, :up, 30)
+      assert {:error, :not_connected} = Drone.query(:nonexistent_drone, :battery)
+      assert {:error, :not_connected} = Drone.telemetry(:nonexistent_drone)
+      assert {:error, :not_connected} = Drone.emergency(:nonexistent_drone)
+      assert {:error, :not_connected} = Drone.disconnect(:nonexistent_drone)
+    end
+  end
+
+  describe "command range validation" do
+    test "rejects out-of-range distance, degrees, and speed" do
+      name = :"range_#{System.unique_integer([:positive])}"
+      {:ok, ^name} = Drone.connect(:sim, name: name)
+      Drone.connect_sdk(name)
+      :ok = Drone.takeoff(name)
+
+      assert {:error, :safety, :invalid_distance} = Drone.move(name, :up, 9999)
+      assert {:error, :safety, :invalid_degrees} = Drone.rotate(name, :cw, 99_999)
+      assert {:error, :safety, :invalid_speed} = Drone.set_speed(name, 999)
 
       :ok = Drone.land(name)
       :ok = Drone.disconnect(name)

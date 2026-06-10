@@ -13,21 +13,9 @@ defmodule Drone.Safety do
   Emergency commands bypass all safety checks.
   """
 
-  alias Drone.{Command, Safety.Geofence, Safety.Policy}
+  alias Drone.{Command, Error, Safety.Geofence, Safety.Policy}
 
-  @type rejection_reason ::
-          :command_not_allowed
-          | :not_in_sdk_mode
-          | :not_flying
-          | :already_flying
-          | :max_altitude
-          | :max_distance
-          | :low_battery
-          | :geofence_violation
-          | :invalid_distance
-          | :invalid_degrees
-          | :invalid_speed
-          | :invalid_seconds
+  @type rejection_reason :: Error.safety_reason()
 
   @type warning :: :low_battery | :no_prop_guards
 
@@ -93,7 +81,7 @@ defmodule Drone.Safety do
     if is_integer(distance) and distance >= @min_distance_cm and distance <= @max_distance_cm do
       :ok
     else
-      {:error, :safety, :invalid_distance}
+      Error.safety(:invalid_distance)
     end
   end
 
@@ -103,7 +91,7 @@ defmodule Drone.Safety do
     if is_integer(degrees) and degrees >= @min_degrees and degrees <= @max_degrees do
       :ok
     else
-      {:error, :safety, :invalid_degrees}
+      Error.safety(:invalid_degrees)
     end
   end
 
@@ -113,7 +101,7 @@ defmodule Drone.Safety do
     if is_integer(speed) and speed >= @min_speed_cm_s and speed <= @max_speed_cm_s do
       :ok
     else
-      {:error, :safety, :invalid_speed}
+      Error.safety(:invalid_speed)
     end
   end
 
@@ -123,7 +111,7 @@ defmodule Drone.Safety do
     if is_integer(seconds) and seconds > 0 do
       :ok
     else
-      {:error, :safety, :invalid_seconds}
+      Error.safety(:invalid_seconds)
     end
   end
 
@@ -135,8 +123,8 @@ defmodule Drone.Safety do
   defp validate_mode(%Command{type: :query}, %{mode: mode}) when mode in [:sdk_mode, :flying],
     do: :ok
 
-  defp validate_mode(_cmd, %{mode: :emergency}), do: {:error, :safety, :emergency_active}
-  defp validate_mode(_cmd, %{mode: :idle}), do: {:error, :safety, :not_in_sdk_mode}
+  defp validate_mode(_cmd, %{mode: :emergency}), do: Error.safety(:emergency_active)
+  defp validate_mode(_cmd, %{mode: :idle}), do: Error.safety(:not_in_sdk_mode)
   defp validate_mode(_cmd, %{mode: :sdk_mode}), do: :ok
   defp validate_mode(_cmd, %{mode: :flying}), do: :ok
 
@@ -148,19 +136,19 @@ defmodule Drone.Safety do
     if type in allowlist or :emergency in allowlist do
       :ok
     else
-      {:error, :safety, :command_not_allowed}
+      Error.safety(:command_not_allowed)
     end
   end
 
   defp validate_flying_requirement(%Command{type: :takeoff}, %{flying: false}), do: :ok
 
   defp validate_flying_requirement(%Command{type: :takeoff}, %{flying: true}),
-    do: {:error, :safety, :already_flying}
+    do: Error.safety(:already_flying)
 
   defp validate_flying_requirement(%Command{type: :land}, %{flying: true}), do: :ok
 
   defp validate_flying_requirement(%Command{type: :land}, %{flying: false}),
-    do: {:error, :safety, :not_flying}
+    do: Error.safety(:not_flying)
 
   defp validate_flying_requirement(%Command{type: type}, %{flying: true})
        when type in [:move, :rotate, :flip, :hover, :stop],
@@ -168,7 +156,7 @@ defmodule Drone.Safety do
 
   defp validate_flying_requirement(%Command{type: type}, %{flying: false})
        when type in [:move, :rotate, :flip, :hover, :stop],
-       do: {:error, :safety, :not_flying}
+       do: Error.safety(:not_flying)
 
   defp validate_flying_requirement(%Command{type: type}, %{flying: _})
        when type in [:sdk_mode, :query, :speed, :emergency],
@@ -201,7 +189,7 @@ defmodule Drone.Safety do
     if new_z <= max_z do
       :ok
     else
-      {:error, :safety, :max_altitude}
+      Error.safety(:max_altitude)
     end
   end
 
@@ -213,7 +201,7 @@ defmodule Drone.Safety do
     if takeoff_height <= max_z do
       :ok
     else
-      {:error, :safety, :max_altitude}
+      Error.safety(:max_altitude)
     end
   end
 
@@ -247,7 +235,7 @@ defmodule Drone.Safety do
     if current_dist <= max_dist do
       :ok
     else
-      {:error, :safety, :max_distance}
+      Error.safety(:max_distance)
     end
   end
 
@@ -264,7 +252,7 @@ defmodule Drone.Safety do
     if battery >= min_battery do
       :ok
     else
-      {:error, :safety, :low_battery}
+      Error.safety(:low_battery)
     end
   end
 
@@ -296,7 +284,7 @@ defmodule Drone.Safety do
     if Geofence.contains?(gf, {new_x, new_y}) do
       :ok
     else
-      {:error, :safety, :geofence_violation}
+      Error.safety(:geofence_violation)
     end
   end
 

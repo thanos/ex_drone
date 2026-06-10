@@ -21,7 +21,7 @@ defmodule Drone.Adapters.Tello.Parser do
     cond do
       trimmed == "ok" -> {:ok, :ok}
       trimmed == "error" -> {:error, :command_error}
-      match = Regex.run(~r/^(\d+)$/, trimmed) -> {:ok, String.to_integer(Enum.at(match, 1))}
+      match = Regex.run(~r/^(-?\d+)$/, trimmed) -> {:ok, String.to_integer(Enum.at(match, 1))}
       byte_size(trimmed) > 0 -> {:ok, trimmed}
       true -> {:error, :command_error}
     end

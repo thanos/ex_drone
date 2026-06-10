@@ -21,6 +21,21 @@ defmodule Drone.Adapters.SimTest do
     end
   end
 
+  describe "battery reporting" do
+    test "reports integer battery after fractional drain" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, _, state} = Sim.command(state, Command.takeoff())
+      {:ok, _, state} = Sim.command(state, Command.move(:up, 30))
+
+      {:ok, telemetry, _} = Sim.telemetry(state)
+      assert is_integer(telemetry.battery)
+
+      {:ok, battery, _} = Sim.command(state, Command.query(:battery))
+      assert is_integer(battery)
+    end
+  end
+
   describe "command/2 - SDK mode" do
     test "enters SDK mode from idle" do
       {:ok, state} = Sim.connect([])
