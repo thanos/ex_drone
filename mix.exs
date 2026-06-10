@@ -19,7 +19,7 @@ defmodule Drone.MixProject do
           "docs/architecture.md",
           "docs/adapter_authoring.md"
         ],
-        source_url: "https://github.com/user/ex_drone",
+source_url: "https://github.com/thanos/ex_drone",
         formatters: ["html", "epub"]
       ],
       test_coverage: [tool: ExCoveralls],
@@ -65,7 +65,7 @@ defmodule Drone.MixProject do
       files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE),
       licenses: ["MIT"],
       maintainers: ["Thanos Vassilakis"],
-      links: %{"GitHub" => "https://github.com/user/ex_drone"}
+      links: %{"GitHub" => "https://github.com/thanos/ex_drone"}
     ]
   end
 end
