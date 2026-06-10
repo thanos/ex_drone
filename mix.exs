@@ -19,7 +19,7 @@ defmodule Drone.MixProject do
           "docs/architecture.md",
           "docs/adapter_authoring.md"
         ],
-source_url: "https://github.com/thanos/ex_drone",
+        source_url: "https://github.com/thanos/ex_drone",
         formatters: ["html", "epub"]
       ],
       test_coverage: [tool: ExCoveralls],
