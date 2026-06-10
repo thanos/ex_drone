@@ -1,3 +1,5 @@
+Mox.defmock(Drone.AdapterMock, for: Drone.Adapter)
+
 ExUnit.start(exclude: [:pending], max_cases: 1)
 
 case Application.ensure_all_started(:ex_drone) do

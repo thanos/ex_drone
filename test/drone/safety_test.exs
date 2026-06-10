@@ -299,5 +299,36 @@ defmodule Drone.SafetyTest do
       cmd = Command.move(:forward, 50)
       assert {:ok, _} = Safety.check(cmd, policy, state)
     end
+
+    test "no geofence check when geofence is nil" do
+      policy = %Policy{geofence: nil}
+      state = %{@flying_state | x: 500, y: 500}
+      cmd = Command.move(:forward, 100)
+      assert {:ok, _} = Safety.check(cmd, policy, state)
+    end
+  end
+
+  describe "speed command validation" do
+    test "allows speed command while grounded in sdk_mode" do
+      cmd = Command.speed(50)
+      assert {:ok, _} = Safety.check(cmd, Policy.default(), @ground_state)
+    end
+
+    test "allows speed command while flying" do
+      cmd = Command.speed(50)
+      assert {:ok, _} = Safety.check(cmd, Policy.default(), @flying_state)
+    end
+  end
+
+  describe "stop command validation" do
+    test "requires flying for stop command" do
+      cmd = Command.stop()
+      assert {:error, :safety, :not_flying} = Safety.check(cmd, Policy.default(), @ground_state)
+    end
+
+    test "allows stop when flying" do
+      cmd = Command.stop()
+      assert {:ok, _} = Safety.check(cmd, Policy.default(), @flying_state)
+    end
   end
 end

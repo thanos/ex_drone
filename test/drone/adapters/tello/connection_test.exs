@@ -26,4 +26,31 @@ defmodule Drone.Adapters.Tello.ConnectionTest do
       Connection.close(socket)
     end
   end
+
+  describe "default configuration" do
+    test "default_drone_ip returns correct IP" do
+      assert Connection.default_drone_ip() == {192, 168, 10, 1}
+    end
+
+    test "default_drone_port returns correct port" do
+      assert Connection.default_drone_port() == 8889
+    end
+
+    test "default_local_port returns correct port" do
+      assert Connection.default_local_port() == 8889
+    end
+
+    test "default_timeout returns correct timeout" do
+      assert Connection.default_timeout() == 10_000
+    end
+  end
+
+  describe "send_command/3" do
+    test "returns error when sending to closed socket" do
+      {:ok, socket} = Connection.open(local_port: 0)
+      Connection.close(socket)
+      # Sending to a closed socket should error
+      assert {:error, _} = Connection.send_command(socket, "command")
+    end
+  end
 end

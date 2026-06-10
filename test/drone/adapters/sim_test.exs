@@ -137,6 +137,44 @@ defmodule Drone.Adapters.SimTest do
       assert state.flying == false
       assert state.mode == :emergency
     end
+
+    test "emergency mode blocks all commands" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.emergency())
+      assert {:error, :emergency_active, _} = Sim.command(state, Command.sdk_mode())
+      assert {:error, :emergency_active, _} = Sim.command(state, Command.takeoff())
+    end
+  end
+
+  describe "command/2 - hover" do
+    test "hovers for specified seconds" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, _, state} = Sim.command(state, Command.takeoff())
+      {:ok, _, state} = Sim.command(state, Command.hover(5))
+      assert state.last_command.type == :hover
+    end
+  end
+
+  describe "command/2 - speed" do
+    test "sets speed" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, _, state} = Sim.command(state, Command.takeoff())
+      {:ok, _, state} = Sim.command(state, Command.speed(50))
+      assert state.speed == 50
+    end
+  end
+
+  describe "command/2 - stop" do
+    test "stops the drone" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, _, state} = Sim.command(state, Command.takeoff())
+      {:ok, _, state} = Sim.command(state, Command.speed(50))
+      {:ok, _, state} = Sim.command(state, Command.stop())
+      assert state.speed == 0
+    end
   end
 
   describe "command/2 - queries" do
@@ -147,11 +185,50 @@ defmodule Drone.Adapters.SimTest do
       assert value == 75
     end
 
+    test "returns height" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, _, state} = Sim.command(state, Command.takeoff())
+      {:ok, value, _} = Sim.command(state, Command.query(:height))
+      assert value == 30
+    end
+
+    test "returns speed" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, _, state} = Sim.command(state, Command.takeoff())
+      {:ok, _, state} = Sim.command(state, Command.speed(80))
+      {:ok, value, _} = Sim.command(state, Command.query(:speed))
+      assert value == 80
+    end
+
+    test "returns time" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, _, state} = Sim.command(state, Command.takeoff())
+      {:ok, value, _} = Sim.command(state, Command.query(:time))
+      assert value == 3
+    end
+
+    test "returns wifi" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, value, _} = Sim.command(state, Command.query(:wifi))
+      assert value == "sim_wifi"
+    end
+
     test "returns sdk version" do
       {:ok, state} = Sim.connect([])
       {:ok, _, state} = Sim.command(state, Command.sdk_mode())
       {:ok, value, _} = Sim.command(state, Command.query(:sdk_version))
       assert value == "sim_1.0"
+    end
+
+    test "returns serial number" do
+      {:ok, state} = Sim.connect([])
+      {:ok, _, state} = Sim.command(state, Command.sdk_mode())
+      {:ok, value, _} = Sim.command(state, Command.query(:serial_number))
+      assert value == "SIM001"
     end
   end
 
@@ -181,6 +258,12 @@ defmodule Drone.Adapters.SimTest do
       {:ok, state} = Sim.connect(fail_commands: [:takeoff])
       {:ok, _, state} = Sim.command(state, Command.sdk_mode())
       assert {:error, :simulated_failure, _} = Sim.command(state, Command.takeoff())
+    end
+
+    test "fails commands with failure_rate 1.0" do
+      {:ok, state} = Sim.connect(failure_rate: 1.0)
+      # failure_rate affects all commands, so even sdk_mode will fail
+      assert {:error, :simulated_failure, _} = Sim.command(state, Command.sdk_mode())
     end
   end
 

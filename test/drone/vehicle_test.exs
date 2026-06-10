@@ -152,4 +152,75 @@ defmodule Drone.VehicleTest do
       :telemetry.detach(handler)
     end
   end
+
+  describe "error handling" do
+    test "handles adapter connection errors gracefully" do
+      # Use an invalid adapter to trigger connection error
+      name = :"err_conn_#{System.unique_integer([:positive])}"
+      # This should return an error since :invalid_adapter doesn't exist
+      result = Drone.connect(:invalid_adapter, name: name)
+      assert {:error, _} = result
+    end
+  end
+
+  describe "state synchronization" do
+    test "tracks flying state across commands" do
+      name = :"state_fly_#{System.unique_integer([:positive])}"
+      {:ok, ^name} = Drone.connect(:sim, name: name)
+      Drone.connect_sdk(name)
+
+      # Initially not flying
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.flying == false
+
+      # After takeoff, flying
+      Drone.takeoff(name)
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.flying == true
+
+      # After land, not flying
+      Drone.land(name)
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.flying == false
+    end
+
+    test "tracks mode transitions" do
+      name = :"state_mode_#{System.unique_integer([:positive])}"
+      {:ok, ^name} = Drone.connect(:sim, name: name)
+
+      # Initially idle
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.mode == :idle
+
+      # After SDK mode
+      Drone.connect_sdk(name)
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.mode == :sdk_mode
+
+      # After takeoff, flying
+      Drone.takeoff(name)
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.mode == :flying
+
+      # Emergency mode
+      Drone.emergency(name)
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.mode == :emergency
+    end
+
+    test "tracks speed changes" do
+      name = :"state_speed_#{System.unique_integer([:positive])}"
+      {:ok, ^name} = Drone.connect(:sim, name: name)
+      Drone.connect_sdk(name)
+      Drone.takeoff(name)
+
+      Drone.set_speed(name, 75)
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.speed == 75
+
+      Drone.stop(name)
+      {:ok, telemetry} = Drone.telemetry(name)
+      assert telemetry.speed == 0
+    end
+  end
 end

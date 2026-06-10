@@ -22,7 +22,10 @@ defmodule Drone.MixProject do
         source_url: "https://github.com/thanos/ex_drone",
         formatters: ["html", "epub"]
       ],
-      test_coverage: [tool: ExCoveralls],
+      test_coverage: [
+        tool: ExCoveralls,
+        ignore_modules: [FakeTelloServer]
+      ],
       preferred_cli_env: [
         coveralls: :test,
         "coveralls.detail": :test,
@@ -47,6 +50,7 @@ defmodule Drone.MixProject do
   defp deps do
     [
       {:telemetry, "~> 1.0"},
+      {:mox, "~> 1.1", only: :test},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
