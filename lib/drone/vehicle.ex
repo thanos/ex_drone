@@ -364,10 +364,6 @@ defmodule Drone.Vehicle do
     add_to_history(vehicle_state, cmd)
   end
 
-  defp update_vehicle_state(vehicle_state, cmd, _reply) do
-    add_to_history(vehicle_state, cmd)
-  end
-
   defp add_to_history(vehicle_state, cmd) do
     %{vehicle_state | last_command: cmd, command_history: [cmd | vehicle_state.command_history]}
   end
