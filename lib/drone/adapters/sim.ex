@@ -80,7 +80,7 @@ defmodule Drone.Adapters.Sim do
        y: state.y,
        z: state.z,
        yaw: state.yaw,
-       battery: state.battery,
+       battery: trunc(state.battery),
        speed: state.speed,
        flying: state.flying,
        mode: state.mode,
@@ -209,7 +209,7 @@ defmodule Drone.Adapters.Sim do
 
     value =
       case query_type do
-        :battery -> state.battery
+        :battery -> trunc(state.battery)
         :height -> state.z
         :speed -> state.speed
         :time -> length(state.command_history)

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/thanos/ex_drone/actions/workflows/ci.yml/badge.svg)](https://github.com/thanos/ex_drone/actions/workflows/ci.yml) [![Coverage Status](https://coveralls.io/repos/github/thanos/ex_drone/badge.svg?branch=main)](https://coveralls.io/github/thanos/ex_drone?branch=main)
 
-BEAM-native drone control for Elixir and Erlang. Fly, monitor, simulate, and coordinate programmable drones using supervised processes, telemetry, missions, and swarm APIs.
+BEAM-native drone control for Elixir and Erlang. Fly, monitor, and simulate programmable drones using supervised processes, telemetry, and missions.
 
 ## Safety Warning
 

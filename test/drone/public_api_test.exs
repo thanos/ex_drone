@@ -17,7 +17,7 @@ defmodule Drone.PublicAPITest do
       :ok = Drone.takeoff(name)
 
       :ok = Drone.move(name, :up, 30)
-      :ok = Drone.move(name, :down, 10)
+      :ok = Drone.move(name, :down, 20)
       :ok = Drone.move(name, :forward, 50)
       :ok = Drone.move(name, :back, 20)
       :ok = Drone.move(name, :left, 30)

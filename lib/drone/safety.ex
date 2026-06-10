@@ -24,8 +24,20 @@ defmodule Drone.Safety do
           | :max_distance
           | :low_battery
           | :geofence_violation
+          | :invalid_distance
+          | :invalid_degrees
+          | :invalid_speed
+          | :invalid_seconds
 
   @type warning :: :low_battery | :no_prop_guards
+
+  # Tello SDK protocol limits.
+  @min_distance_cm 20
+  @max_distance_cm 500
+  @min_degrees 1
+  @max_degrees 3600
+  @min_speed_cm_s 10
+  @max_speed_cm_s 100
 
   @type vehicle_state :: %{
           mode: :idle | :sdk_mode | :flying | :emergency,
@@ -57,7 +69,8 @@ defmodule Drone.Safety do
   def check(%Command{} = cmd, %Policy{} = policy, %{} = state) do
     warnings = []
 
-    with :ok <- validate_mode(cmd, state),
+    with :ok <- validate_args(cmd),
+         :ok <- validate_mode(cmd, state),
          :ok <- validate_allowlist(cmd, policy),
          :ok <- validate_flying_requirement(cmd, state),
          :ok <- validate_altitude(cmd, policy, state),
@@ -73,6 +86,48 @@ defmodule Drone.Safety do
       end
     end
   end
+
+  defp validate_args(%Command{type: :move, args: args}) do
+    distance = Keyword.get(args, :distance)
+
+    if is_integer(distance) and distance >= @min_distance_cm and distance <= @max_distance_cm do
+      :ok
+    else
+      {:error, :safety, :invalid_distance}
+    end
+  end
+
+  defp validate_args(%Command{type: :rotate, args: args}) do
+    degrees = Keyword.get(args, :degrees)
+
+    if is_integer(degrees) and degrees >= @min_degrees and degrees <= @max_degrees do
+      :ok
+    else
+      {:error, :safety, :invalid_degrees}
+    end
+  end
+
+  defp validate_args(%Command{type: :speed, args: args}) do
+    speed = Keyword.get(args, :speed)
+
+    if is_integer(speed) and speed >= @min_speed_cm_s and speed <= @max_speed_cm_s do
+      :ok
+    else
+      {:error, :safety, :invalid_speed}
+    end
+  end
+
+  defp validate_args(%Command{type: :hover, args: args}) do
+    seconds = Keyword.get(args, :seconds)
+
+    if is_integer(seconds) and seconds > 0 do
+      :ok
+    else
+      {:error, :safety, :invalid_seconds}
+    end
+  end
+
+  defp validate_args(%Command{}), do: :ok
 
   defp validate_mode(%Command{type: :sdk_mode}, %{mode: :idle}), do: :ok
   defp validate_mode(%Command{type: :sdk_mode}, %{mode: :sdk_mode}), do: :ok

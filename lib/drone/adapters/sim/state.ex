@@ -7,7 +7,7 @@ defmodule Drone.Adapters.Sim.State do
           z: integer(),
           yaw: integer(),
           flying: boolean(),
-          battery: integer(),
+          battery: number(),
           speed: integer(),
           mode: :idle | :sdk_mode | :flying | :emergency,
           last_command: Drone.Command.t() | nil,

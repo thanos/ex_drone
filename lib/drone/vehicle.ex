@@ -166,7 +166,9 @@ defmodule Drone.Vehicle do
   end
 
   def handle_call(:disconnect, _from, %__MODULE__{} = state) do
-    state.adapter_module.disconnect(state.adapter_state)
+    # Cleanup (adapter disconnect + telemetry) is performed in terminate/2,
+    # which always runs on a :normal stop. Doing it here too would close the
+    # adapter twice.
     {:stop, :normal, :ok, state}
   end
 

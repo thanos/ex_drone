@@ -10,20 +10,31 @@ Drones are physical devices that can cause injury. A software bug should never r
 
 ```
 Command Requested
-  -> Normalize Command
-  -> Validate Command Shape
-  -> Check Safety Policy
-     -> Emergency? -> Bypass all, send immediately
-     -> Allowlist? -> Reject if not allowed
-     -> Altitude? -> Reject if exceeds max
-     -> Distance? -> Reject if exceeds max
-     -> Battery? -> Reject takeoff if too low
-     -> Geofence? -> Reject if outside area
+  -> Emergency? -> Bypass all, send immediately
+  -> Validate Command Args -> Reject if out of Tello SDK range
+  -> Check Mode -> Reject if not in a valid state
+  -> Allowlist? -> Reject if not allowed
+  -> Flying Requirement? -> Reject if state does not match
+  -> Altitude? -> Reject if exceeds max
+  -> Distance? -> Reject if exceeds max
+  -> Battery? -> Reject takeoff if too low
+  -> Geofence? -> Reject if outside area
   -> Emit Telemetry
   -> Send to Adapter
   -> Parse Result
   -> Update Vehicle State
 ```
+
+## Command Argument Limits
+
+Movement arguments are validated against the Tello SDK protocol ranges
+before any policy checks. Out-of-range values are rejected with
+`{:error, :safety, reason}`:
+
+- `move/3` distance: 20-500 cm (`:invalid_distance`)
+- `rotate/3` degrees: 1-3600 (`:invalid_degrees`)
+- `set_speed/2` speed: 10-100 cm/s (`:invalid_speed`)
+- `hover/2` seconds: must be a positive integer (`:invalid_seconds`)
 
 ## Safety Policy Configuration
 
@@ -62,7 +73,7 @@ Validate missions without flying:
 ```elixir
 {:ok, drone} = Drone.connect(:sim, name: :test, safety: [dry_run: true])
 Drone.connect_sdk(drone)
-Drone.takeoff(drone)  # Returns {:ok, :dry_run}, no commands sent
+Drone.takeoff(drone)  # Returns :ok, validated but no command sent to the drone
 ```
 
 ## Geofencing
@@ -71,7 +82,7 @@ Restrict flight to a circular area:
 
 ```elixir
 geofence = Drone.Safety.Geofence.circle({0, 0}, 500)
-{:ok, drone} = Drone.connect(:sim, name: :gEOFENCED,
+{:ok, drone} = Drone.connect(:sim, name: :geofenced,
   safety: [geofence: geofence]
 )
 ```

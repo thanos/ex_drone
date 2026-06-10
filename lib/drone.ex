@@ -85,11 +85,7 @@ defmodule Drone do
   """
   @spec connect_sdk(drone()) :: :ok | {:error, term()}
   def connect_sdk(drone) do
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.sdk_mode()}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.sdk_mode())
   end
 
   @doc """
@@ -100,12 +96,7 @@ defmodule Drone do
   """
   @spec takeoff(drone()) :: :ok | {:error, term()}
   def takeoff(drone) do
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.takeoff()}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, :safety, reason} -> {:error, :safety, reason}
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.takeoff())
   end
 
   @doc """
@@ -115,12 +106,7 @@ defmodule Drone do
   """
   @spec land(drone()) :: :ok | {:error, term()}
   def land(drone) do
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.land()}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, :safety, reason} -> {:error, :safety, reason}
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.land())
   end
 
   @doc """
@@ -131,7 +117,7 @@ defmodule Drone do
   """
   @spec emergency(drone()) :: :ok | {:error, term()}
   def emergency(drone) do
-    GenServer.call(Vehicle.whereis(drone), :emergency)
+    call(drone, :emergency)
   end
 
   @doc """
@@ -143,12 +129,7 @@ defmodule Drone do
   """
   @spec move(drone(), Command.direction(), pos_integer()) :: :ok | {:error, term()}
   def move(drone, direction, distance) do
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.move(direction, distance)}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, :safety, reason} -> {:error, :safety, reason}
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.move(direction, distance))
   end
 
   @doc """
@@ -159,12 +140,7 @@ defmodule Drone do
   """
   @spec rotate(drone(), Command.rotation(), pos_integer()) :: :ok | {:error, term()}
   def rotate(drone, direction, degrees) do
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.rotate(direction, degrees)}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, :safety, reason} -> {:error, :safety, reason}
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.rotate(direction, degrees))
   end
 
   @doc """
@@ -176,12 +152,7 @@ defmodule Drone do
   """
   @spec flip(drone(), Command.flip_direction()) :: :ok | {:error, term()}
   def flip(drone, direction) do
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.flip(direction)}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, :safety, reason} -> {:error, :safety, reason}
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.flip(direction))
   end
 
   @doc """
@@ -192,13 +163,7 @@ defmodule Drone do
   @spec hover(drone(), keyword()) :: :ok | {:error, term()}
   def hover(drone, opts \\ []) do
     seconds = Keyword.get(opts, :seconds, 1)
-
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.hover(seconds)}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, :safety, reason} -> {:error, :safety, reason}
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.hover(seconds))
   end
 
   @doc """
@@ -208,12 +173,7 @@ defmodule Drone do
   """
   @spec set_speed(drone(), pos_integer()) :: :ok | {:error, term()}
   def set_speed(drone, speed) do
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.speed(speed)}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, :safety, reason} -> {:error, :safety, reason}
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.speed(speed))
   end
 
   @doc """
@@ -221,12 +181,7 @@ defmodule Drone do
   """
   @spec stop(drone()) :: :ok | {:error, term()}
   def stop(drone) do
-    case GenServer.call(Vehicle.whereis(drone), {:command, Command.stop()}) do
-      {:ok, :ok} -> :ok
-      {:ok, :dry_run} -> :ok
-      {:error, :safety, reason} -> {:error, :safety, reason}
-      {:error, reason} -> {:error, reason}
-    end
+    command(drone, Command.stop())
   end
 
   @doc """
@@ -239,7 +194,7 @@ defmodule Drone do
   """
   @spec query(drone(), Command.query_type()) :: {:ok, term()} | {:error, term()}
   def query(drone, type) do
-    GenServer.call(Vehicle.whereis(drone), {:command, Command.query(type)})
+    call(drone, {:command, Command.query(type)})
   end
 
   @doc """
@@ -249,14 +204,34 @@ defmodule Drone do
   """
   @spec telemetry(drone()) :: {:ok, map()} | {:error, term()}
   def telemetry(drone) do
-    GenServer.call(Vehicle.whereis(drone), :telemetry)
+    call(drone, :telemetry)
   end
 
   @doc """
   Disconnects from the drone and stops the process.
   """
-  @spec disconnect(drone()) :: :ok
+  @spec disconnect(drone()) :: :ok | {:error, :not_connected}
   def disconnect(drone) do
-    GenServer.call(Vehicle.whereis(drone), :disconnect)
+    call(drone, :disconnect)
+  end
+
+  # Sends a command to the vehicle process and normalizes the reply.
+  defp command(drone, %Command{} = cmd) do
+    case call(drone, {:command, cmd}) do
+      {:ok, :ok} -> :ok
+      {:ok, :dry_run} -> :ok
+      {:ok, value} -> {:ok, value}
+      {:error, :safety, reason} -> {:error, :safety, reason}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Resolves the drone process and issues a GenServer call, returning
+  # {:error, :not_connected} when no process is registered for the name.
+  defp call(drone, message) do
+    case Vehicle.whereis(drone) do
+      nil -> {:error, :not_connected}
+      pid -> GenServer.call(pid, message)
+    end
   end
 end

@@ -24,4 +24,4 @@
 - Configurable battery drain simulation
 - Configurable failure injection in simulator
 - Position tracking (x, y, z, yaw) in simulator and vehicle state
-- 148 passing tests
+- Command argument validation enforcing Tello SDK ranges (distance, rotation, speed)

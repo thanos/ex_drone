@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- Elixir 1.18 or later
-- Erlang/OTP 25 or later
+- Elixir 1.17 or later
+- Erlang/OTP 26 or later
 - A DJI Tello or Tello EDU (optional -- the simulator works without hardware)
 
 ## Installation

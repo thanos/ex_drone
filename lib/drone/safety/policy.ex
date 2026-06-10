@@ -14,8 +14,10 @@ defmodule Drone.Safety.Policy do
 
   ## Example
 
-      policy = Drone.Safety.Policy.new(max_altitude_cm: 200, indoor: true)
-      {:ok, drone} = Drone.connect(:sim, name: :test, safety: policy)
+  Safety options are passed as a keyword list to `Drone.connect/2` and are
+  used to build a policy via `new/1`:
+
+      {:ok, drone} = Drone.connect(:sim, name: :test, safety: [max_altitude_cm: 200, indoor: true])
   """
 
   @type t :: %__MODULE__{
