@@ -35,11 +35,9 @@ defmodule Drone.SupervisorTest do
 
       {:ok, pid} = Supervisor.start_vehicle(opts)
       assert :ok = Supervisor.stop_vehicle(name)
-      
       # Wait for process to actually terminate
       ref = Process.monitor(pid)
       assert_receive {:DOWN, ^ref, :process, ^pid, _}, 1000
-      
       assert Vehicle.whereis(name) == nil
     end
 
