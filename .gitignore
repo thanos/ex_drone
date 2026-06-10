@@ -12,3 +12,4 @@ erl_crash.dump
 /priv/plts/*.plt.hash
 coveralls.json
 *.tar
+prompts/
