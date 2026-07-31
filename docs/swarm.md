@@ -104,3 +104,10 @@ mix run examples/good_bad_advisor.exs
 Absolute formations are simulator-first. Stock Tello Wi-Fi and lack of
 global pose make closed-loop choreography unreliable. Tello EDU station
 mode helps connectivity, not localization.
+
+## Further Reading
+
+- [Formations](formations.md)
+- Research: [Swarm Coordination](research/swarm_coordination.md)
+- Deferred flocking and closed-loop work: [v0.2.0 Deferred](design/v0_2_0_deferred.md)
+- Surveys and classic papers: [Further Reading](further_reading.md#swarming-formations-and-strategies)

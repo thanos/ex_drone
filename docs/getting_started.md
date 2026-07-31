@@ -13,7 +13,7 @@ Add `ex_drone` to your dependencies:
 ```elixir
 def deps do
   [
-    {:ex_drone, "~> 0.1.0"}
+    {:ex_drone, "~> 0.2.0"}
   ]
 end
 ```
@@ -90,3 +90,9 @@ Drone.takeoff(drone)
 ```
 
 Always test your missions in the simulator first.
+## Next Steps
+
+- [Safety](safety.md) — policies, geofencing, allowlists
+- [Simulator](simulator.md) — failure injection and initial pose
+- [Swarms](swarm.md) and [Formations](formations.md) — multi-drone coordination
+- [Further Reading](further_reading.md) — platforms, planners, and research

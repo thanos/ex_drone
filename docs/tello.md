@@ -62,3 +62,7 @@ Always use safety policies when flying a real drone:
 ```
 
 **Warning**: The Tello is a real physical drone. Always test in the simulator first. Use prop guards. Do not fly near faces.
+## Further Reading
+
+- Research: [Tello SDK](research/tello_sdk.md), [BEAM UDP](research/beam_udp.md)
+- Official SDK PDF and related platforms: [Further Reading](further_reading.md#tello-and-classroom-hardware)

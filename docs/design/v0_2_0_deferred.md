@@ -323,3 +323,9 @@ When a deferred item above is scheduled:
 | Platforms | Sim-first | Tello absolute, Crazyflie, MAVLink swarms |
 | Sensors / aero | None | Video sync, sector tasking, drag models |
 | Tooling | Events + example | Dashboard, visualizer, replay |
+
+## See also
+
+- Guides: [Swarms](../swarm.md), [Formations](../formations.md)
+- Research: [Swarm Coordination](../research/swarm_coordination.md)
+- Further reading: [Swarming, formations, and strategies](../further_reading.md#swarming-formations-and-strategies)

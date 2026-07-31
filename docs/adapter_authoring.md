@@ -110,3 +110,7 @@ assert telemetry.flying == true
 # Disconnect
 :ok = MyAdapter.disconnect(state)
 ```
+## Further Reading
+
+- Design: [Adapter Contract](design/adapter_contract.md)
+- Platforms and planned adapters: [Further Reading](further_reading.md#platforms-and-adapters)

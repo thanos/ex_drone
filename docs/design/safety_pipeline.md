@@ -319,3 +319,7 @@ describe "emergency bypass" do
   end
 end
 ```
+## See also
+
+- Guide: [Safety](../safety.md)
+- Further reading: [Safety](../further_reading.md#safety)

@@ -29,7 +29,7 @@ control.
 - Named vehicles via `Drone.Vehicle.Registry`
 - Per-drone safety pipeline (altitude, distance, battery, geofence, allowlist)
 - Position tracking (`x`, `y`, `z`, `yaw`) in vehicle state and simulator
-- Shared geometry (`Drone.Geometry`) for yaw-aware movement
+- Shared geometry helpers for yaw-aware movement
 - Single-drone mission DSL (`Drone.Mission`)
 - Telemetry events per vehicle
 
@@ -270,3 +270,9 @@ Do not implement those items in v0.2.0 without updating the review checklist.
 7. Good Advisor / Bad Advisor is the didactic deliverable
 8. Real Tello multi-drone is documented as limited; sim is the proof surface
 9. Everything discussed but deferred is tracked in `v0_2_0_deferred.md`
+
+## See also
+
+- Guides: [Swarms](../swarm.md), [Formations](../formations.md)
+- Deferred work: [v0.2.0 Deferred](../design/v0_2_0_deferred.md)
+- Further reading: [Swarming, formations, and strategies](../further_reading.md#swarming-formations-and-strategies)

@@ -126,3 +126,8 @@ Drone.takeoff(drone)
 
 {:error, :safety, :max_altitude} = Drone.move(drone, :up, 100)
 ```
+## Further Reading
+
+- Research: [Simulator Design](research/simulator_design.md)
+- Multi-drone offsets: [Swarms](swarm.md), [Formations](formations.md)
+- Broader geometry and planning refs: [Further Reading](further_reading.md#geometry-and-frames)

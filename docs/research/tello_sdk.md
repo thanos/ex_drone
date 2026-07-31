@@ -148,3 +148,7 @@ The Tello EDU's station mode is essential for swarm control: it allows the drone
 5. **State tracking required**: Since the drone only responds with `ok`/`error`/numeric, the Elixir side must track position state for safety validation.
 6. **Emergency bypass**: The `emergency` command must bypass all safety checks and be sent regardless of current state.
 7. **Command encoding is trivial**: Commands are simple ASCII strings. The main complexity is in timing, safety, and state management, not in protocol encoding.
+## See also
+
+- Guide: [Tello](../tello.md)
+- Further reading: [Tello and classroom hardware](../further_reading.md#tello-and-classroom-hardware)

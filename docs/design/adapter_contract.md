@@ -250,3 +250,7 @@ classDiagram
     Vehicle --> Adapter : uses
     Vehicle --> Safety : validates through
 ```
+## See also
+
+- Guide: [Adapter Authoring](../adapter_authoring.md)
+- Further reading: [Platforms and adapters](../further_reading.md#platforms-and-adapters)

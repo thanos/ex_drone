@@ -371,3 +371,7 @@ User Code              Vehicle GenServer              :telemetry
    |                        |-- [:drone, :telemetry, :update] --> {:ok, map()}
    |<-- {:ok, map()} ------|
 ```
+## See also
+
+- Guide: [Architecture](../architecture.md)
+- Further reading: [BEAM, OTP, and telemetry](../further_reading.md#beam-otp-and-telemetry)

@@ -246,3 +246,7 @@ Contrast with MAVLink (v0.4.0), which uses a binary packet format requiring care
 | Fake server for testing  | Yes, using :gen_udp in test processes           |
 | Error model              | Explicit `{:ok, _}` / `{:error, _}` tuples     |
 | Concurrency              | One GenServer per drone, sequential commands    |
+## See also
+
+- Guide: [Tello](../tello.md), [Architecture](../architecture.md)
+- Further reading: [BEAM, OTP, and telemetry](../further_reading.md#beam-otp-and-telemetry)

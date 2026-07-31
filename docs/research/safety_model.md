@@ -284,3 +284,8 @@ Position estimation is approximate:
 | Indoor mode          | Preset      | Off               | N/A              |
 | Prop guards          | Soft warning| false             | N/A              |
 | Geofence             | Hard limit  | None              | Yes              |
+## See also
+
+- Guide: [Safety](../safety.md)
+- Design: [Safety Pipeline](../design/safety_pipeline.md)
+- Further reading: [Safety](../further_reading.md#safety)

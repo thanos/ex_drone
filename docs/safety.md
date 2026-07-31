@@ -111,3 +111,8 @@ Restrict which commands are allowed:
 ```
 
 The `:emergency` command is always allowed regardless of the allowlist.
+## Further Reading
+
+- Design: [Safety Pipeline](design/safety_pipeline.md)
+- Research: [Safety Model](research/safety_model.md)
+- Background and standards: [Further Reading](further_reading.md#safety)

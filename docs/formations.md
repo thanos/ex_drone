@@ -74,3 +74,10 @@ is deferred.
 
 Live Separate/Align/Cohere, closed-loop hold, formation morphing, and
 leader election are deferred — see `docs/design/v0_2_0_deferred.md`.
+
+## Further Reading
+
+- [Swarms](swarm.md)
+- Research: [Swarm Coordination](research/swarm_coordination.md)
+- Deferred catalogue: [v0.2.0 Deferred](design/v0_2_0_deferred.md)
+- Planners and formation control literature: [Further Reading](further_reading.md#missions-and-planners)

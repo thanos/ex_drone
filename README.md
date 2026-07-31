@@ -2,7 +2,7 @@
 
 [![Hex version](https://img.shields.io/hexpm/v/ex_drone.svg)](https://hex.pm/packages/ex_drone)
 [![Hex docs](https://img.shields.io/badge/docs-hexdocs.pm-blue)](https://hexdocs.pm/ex_drone)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/thanos/ex_drone/blob/main/LICENSE)
 [![CI](https://github.com/thanos/ex_drone/actions/workflows/ci.yml/badge.svg)](https://github.com/thanos/ex_drone/actions/workflows/ci.yml) [![Coverage Status](https://coveralls.io/repos/github/thanos/ex_drone/badge.svg?branch=main)](https://coveralls.io/github/thanos/ex_drone?branch=main)
 
 BEAM-native drone control for Elixir and Erlang. Fly, monitor, and simulate programmable drones using supervised processes, telemetry, and missions.
@@ -68,7 +68,8 @@ Drone.Swarm.connect_sdk(swarm)
 :ok = Drone.Swarm.stop(swarm)
 ```
 
-See `docs/swarm.md`, `docs/formations.md`, and `examples/good_bad_advisor.exs`.
+See [Swarms](docs/swarm.md), [Formations](docs/formations.md), and
+`examples/good_bad_advisor.exs`.
 
 ## Safety Policies
 
@@ -91,7 +92,7 @@ All commands pass through a safety pipeline before reaching the drone:
 {:ok, drone} = Drone.connect(:sim, name: :test, safety: [dry_run: true])
 ```
 
-See `Drone.Safety.Policy` for all safety options.
+See `Drone.Safety.Policy` and the [Safety guide](docs/safety.md).
 
 ## Tello Connection
 
@@ -102,6 +103,8 @@ Drone.takeoff(drone)
 Drone.land(drone)
 Drone.disconnect(drone)
 ```
+
+See the [Tello guide](docs/tello.md).
 
 ## Mission Scripts
 
@@ -125,10 +128,58 @@ mission =
 - **Drone.Safety** -- Pure validation module, no side effects
 - **Drone.Telemetry** -- `:telemetry` events for observability
 - **Drone.Mission** -- Command sequence DSL
+- **Drone.Swarm** -- Multi-drone coordinator (`start/1`, fan-out, `run/2`/`run/3`)
+- **Drone.Formation** -- One-shot geometric formation planners
+
+See the [Architecture guide](docs/architecture.md).
+
+## Documentation
+
+### Guides
+
+- [Getting Started](docs/getting_started.md)
+- [Safety](docs/safety.md)
+- [Simulator](docs/simulator.md)
+- [Tello](docs/tello.md)
+- [Swarms](docs/swarm.md)
+- [Formations](docs/formations.md)
+- [Architecture](docs/architecture.md)
+- [Adapter Authoring](docs/adapter_authoring.md)
+- [Further Reading](docs/further_reading.md)
+
+### Design
+
+- [Adapter Contract](docs/design/adapter_contract.md)
+- [Safety Pipeline](docs/design/safety_pipeline.md)
+- [Telemetry Events](docs/design/telemetry_events.md)
+- [v0.2.0 Deferred Work](docs/design/v0_2_0_deferred.md)
+
+### Research
+
+- [Tello SDK](docs/research/tello_sdk.md)
+- [BEAM UDP](docs/research/beam_udp.md)
+- [Safety Model](docs/research/safety_model.md)
+- [Simulator Design](docs/research/simulator_design.md)
+- [Swarm Coordination](docs/research/swarm_coordination.md)
+
+On HexDocs these pages appear under **Guides**, **Design**, and **Research**.
+
+## Further Reading
+
+Short starter set; the full annotated list is in [docs/further_reading.md](docs/further_reading.md).
+
+- **Tello:** [DJI Tello SDK 2.0 User Guide (PDF)](https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf)
+- **Swarm behaviour:** Reynolds, C. W. "Flocks, Herds, and Schools: A Distributed Behavioral Model." SIGGRAPH, 1987
+- **Formation control:** Balch, T., and Arkin, R. C. "Behavior-based formation control for multirobot teams." IEEE TRA, 1998
+- **Swarm robotics survey:** Brambilla, M. et al. "Swarm robotics: a review from the swarm engineering perspective." Swarm Intelligence, 2013
+- **Motion planning:** LaValle, S. M. [Planning Algorithms](http://lavalle.pl/planning/)
+- **Safety:** Leveson, N. G. *Engineering a Safer World*. MIT Press, 2011
+- **OTP:** [OTP Design Principles](https://www.erlang.org/doc/system/design_principles.html)
+- **Other platforms:** [Crazyflie](https://www.bitcraze.io/documentation/), [MAVLink](https://mavlink.io/en/), [PX4](https://docs.px4.io/), [ArduPilot](https://ardupilot.org/), [Nerves](https://nerves-project.org/)
 
 ## Roadmap
 
-### v0.1.0 — Tello + Simulator Foundation (current)
+### v0.1.0 — Tello + Simulator Foundation
 
 Public API, supervised processes, safety pipeline, simulator, Tello adapter, missions, telemetry.
 
@@ -149,8 +200,8 @@ Public API, supervised processes, safety pipeline, simulator, Tello adapter, mis
 - [x] Emergency stop bypassing all safety checks
 - [x] Dry-run mode for validating missions without flying
 - [x] Flight time simulation (`query(:time)` returns cumulative motor-on seconds)
-- [x] CI/CD — lint, test matrix (1.17-1.20 / OTP 26-29), coverage (90.2%), sobelow, dialyzer, docs, Hex.pm publish
-- [x] 276+ tests, credo --strict clean, --warnings-as-errors clean
+- [x] CI/CD — lint, test matrix (1.17-1.20 / OTP 26-29), coverage, sobelow, dialyzer, docs, Hex.pm publish
+- [x] 291+ tests, credo --strict clean, --warnings-as-errors clean
 
 ### v0.2.0 — Swarms and Mission Orchestration
 
@@ -160,7 +211,7 @@ Multi-drone coordination on the v0.1.0 vehicle model.
 - [x] Named swarm registry (`Drone.Swarm.Registry`)
 - [x] Coordinated takeoff / land / emergency
 - [x] Formation planners — front, column, vee, diamond, echelon, circle
-- [x] `Swarm.run/2` — formations, per-drone missions, or custom functions
+- [x] `Swarm.run/2` / `run/3` — formations, per-drone missions, or custom functions
 - [x] Simulator initial world offsets for multi-drone layouts
 - [x] Good Advisor / Bad Advisor example
 - [x] Deferred flocking / closed-loop catalogue (`docs/design/v0_2_0_deferred.md`)

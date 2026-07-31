@@ -321,3 +321,7 @@ The simulator must:
 8. Produce telemetry snapshots
 9. Enforce the same safety rules as real adapters
 10. Enable fully deterministic, hardware-free testing
+## See also
+
+- Guide: [Simulator](../simulator.md)
+- Further reading: [Geometry and frames](../further_reading.md#geometry-and-frames)

@@ -9,22 +9,7 @@ defmodule Drone.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       elixirc_paths: elixirc_paths(Mix.env()),
-      docs: [
-        main: "Drone",
-        extras: [
-          "docs/getting_started.md",
-          "docs/safety.md",
-          "docs/simulator.md",
-          "docs/tello.md",
-          "docs/swarm.md",
-          "docs/formations.md",
-          "docs/design/v0_2_0_deferred.md",
-          "docs/architecture.md",
-          "docs/adapter_authoring.md"
-        ],
-        source_url: "https://github.com/thanos/ex_drone",
-        formatters: ["html", "epub"]
-      ],
+      docs: docs(),
       test_coverage: [
         tool: ExCoveralls,
         ignore_modules: [FakeTelloServer]
@@ -55,6 +40,63 @@ defmodule Drone.MixProject do
     ]
   end
 
+  defp docs do
+    [
+      main: "readme",
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "docs/getting_started.md": [title: "Getting Started"],
+        "docs/safety.md": [title: "Safety"],
+        "docs/simulator.md": [title: "Simulator"],
+        "docs/tello.md": [title: "Tello"],
+        "docs/swarm.md": [title: "Swarms"],
+        "docs/formations.md": [title: "Formations"],
+        "docs/architecture.md": [title: "Architecture"],
+        "docs/adapter_authoring.md": [title: "Adapter Authoring"],
+        "docs/further_reading.md": [title: "Further Reading"],
+        "docs/design/adapter_contract.md": [title: "Adapter Contract"],
+        "docs/design/safety_pipeline.md": [title: "Safety Pipeline"],
+        "docs/design/telemetry_events.md": [title: "Telemetry Events"],
+        "docs/design/v0_2_0_deferred.md": [title: "v0.2.0 Deferred Work"],
+        "docs/research/tello_sdk.md": [title: "Tello SDK"],
+        "docs/research/beam_udp.md": [title: "BEAM UDP"],
+        "docs/research/safety_model.md": [title: "Safety Model"],
+        "docs/research/simulator_design.md": [title: "Simulator Design"],
+        "docs/research/swarm_coordination.md": [title: "Swarm Coordination"]
+      ],
+      groups_for_extras: [
+        Guides: [
+          "docs/getting_started.md",
+          "docs/safety.md",
+          "docs/simulator.md",
+          "docs/tello.md",
+          "docs/swarm.md",
+          "docs/formations.md",
+          "docs/architecture.md",
+          "docs/adapter_authoring.md",
+          "docs/further_reading.md"
+        ],
+        Design: [
+          "docs/design/adapter_contract.md",
+          "docs/design/safety_pipeline.md",
+          "docs/design/telemetry_events.md",
+          "docs/design/v0_2_0_deferred.md"
+        ],
+        Research: [
+          "docs/research/tello_sdk.md",
+          "docs/research/beam_udp.md",
+          "docs/research/safety_model.md",
+          "docs/research/simulator_design.md",
+          "docs/research/swarm_coordination.md"
+        ]
+      ],
+      skip_undefined_reference_warnings_on: ["README.md", "CHANGELOG.md"],
+      source_url: "https://github.com/thanos/ex_drone",
+      formatters: ["html", "epub"]
+    ]
+  end
+
   defp deps do
     [
       {:telemetry, "~> 1.0"},
@@ -74,10 +116,14 @@ defmodule Drone.MixProject do
   defp package do
     [
       name: "ex_drone",
-      files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE),
+      files: ~w(lib docs .formatter.exs mix.exs README.md CHANGELOG.md LICENSE),
       licenses: ["MIT"],
       maintainers: ["Thanos Vassilakis"],
-      links: %{"GitHub" => "https://github.com/thanos/ex_drone"}
+      links: %{
+        "GitHub" => "https://github.com/thanos/ex_drone",
+        "Changelog" => "https://hexdocs.pm/ex_drone/changelog.html",
+        "Further Reading" => "https://hexdocs.pm/ex_drone/further_reading.html"
+      }
     ]
   end
 end
