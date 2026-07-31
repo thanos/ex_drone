@@ -9,6 +9,15 @@ defmodule Drone.FormationTest do
     end)
   end
 
+  defp forward_cm(mission) do
+    mission
+    |> Mission.commands()
+    |> Enum.reduce(0, fn
+      %{type: :move, args: args}, acc -> acc + Keyword.get(args, :distance, 0)
+      _, acc -> acc
+    end)
+  end
+
   describe "plan/2 front" do
     test "places two drones side-by-side on heading 0" do
       drones = [:a, :b]
@@ -30,7 +39,48 @@ defmodule Drone.FormationTest do
       assert Mission.length(missions.b) > 0
     end
 
-    test "shoulder_pair aliases front" do
+    test "front slots are on X axis at heading 0; column slots on Y" do
+      # Already at expected front slots → empty missions
+      assert {:ok, front} =
+               Formation.plan(:front, %{
+                 drones: [:a, :b],
+                 positions: positions(a: {-50, 0, 0}, b: {50, 0, 0}),
+                 spacing_cm: 100,
+                 origin: {:xy, 0, 0},
+                 heading_deg: 0
+               })
+
+      assert Mission.length(front.a) == 0
+      assert Mission.length(front.b) == 0
+
+      # Front slots are wrong for column → non-empty missions
+      assert {:ok, as_column} =
+               Formation.plan(:column, %{
+                 drones: [:a, :b],
+                 positions: positions(a: {-50, 0, 0}, b: {50, 0, 0}),
+                 spacing_cm: 100,
+                 origin: {:xy, 0, 0},
+                 heading_deg: 0
+               })
+
+      assert Mission.length(as_column.a) > 0
+      assert Mission.length(as_column.b) > 0
+
+      # Column expected slots
+      assert {:ok, column} =
+               Formation.plan(:column, %{
+                 drones: [:a, :b],
+                 positions: positions(a: {0, -50, 0}, b: {0, 50, 0}),
+                 spacing_cm: 100,
+                 origin: {:xy, 0, 0},
+                 heading_deg: 0
+               })
+
+      assert Mission.length(column.a) == 0
+      assert Mission.length(column.b) == 0
+    end
+
+    test "shoulder_pair aliases front for exactly two drones" do
       drones = [:good, :bad]
       pos = positions(good: {0, 0, 0}, bad: {0, 0, 0})
 
@@ -41,24 +91,34 @@ defmodule Drone.FormationTest do
                  spacing_cm: 100,
                  origin: {:xy, 0, 0}
                })
+
+      assert {:error, :too_many_drones} =
+               Formation.plan(:shoulder_pair, %{
+                 drones: [:a, :b, :c],
+                 positions: positions(a: {0, 0, 0}, b: {0, 0, 0}, c: {0, 0, 0}),
+                 spacing_cm: 100,
+                 origin: {:xy, 0, 0}
+               })
     end
   end
 
   describe "plan/2 column" do
     test "places drones along heading" do
       drones = [:a, :b, :c]
-      pos = positions(a: {0, 0, 0}, b: {0, 0, 0}, c: {0, 0, 0})
 
       assert {:ok, missions} =
                Formation.plan(:column, %{
                  drones: drones,
-                 positions: pos,
+                 positions: positions(a: {0, -100, 0}, b: {0, 0, 0}, c: {0, 100, 0}),
                  spacing_cm: 100,
                  origin: {:xy, 0, 0},
                  heading_deg: 0
                })
 
       assert map_size(missions) == 3
+      assert Mission.length(missions.a) == 0
+      assert Mission.length(missions.b) == 0
+      assert Mission.length(missions.c) == 0
     end
   end
 
@@ -86,27 +146,38 @@ defmodule Drone.FormationTest do
       assert map_size(missions) == 3
     end
 
-    test "diamond requires 4 drones" do
+    test "diamond requires exactly 4 drones" do
       assert {:error, :too_few_drones} =
                Formation.plan(:diamond, %{
                  drones: [:a, :b, :c],
                  positions: positions(a: {0, 0, 0}, b: {0, 0, 0}, c: {0, 0, 0})
                })
+
+      assert {:error, :too_many_drones} =
+               Formation.plan(:diamond, %{
+                 drones: [:a, :b, :c, :d, :e],
+                 positions:
+                   positions(a: {0, 0, 0}, b: {0, 0, 0}, c: {0, 0, 0}, d: {0, 0, 0}, e: {0, 0, 0}),
+                 spacing_cm: 100,
+                 origin: {:xy, 0, 0}
+               })
     end
 
     test "diamond plans four slots" do
       drones = [:a, :b, :c, :d]
-      pos = positions(a: {0, 0, 0}, b: {0, 0, 0}, c: {0, 0, 0}, d: {0, 0, 0})
 
       assert {:ok, missions} =
                Formation.plan(:diamond, %{
                  drones: drones,
-                 positions: pos,
+                 positions:
+                   positions(a: {0, 100, 0}, b: {100, 0, 0}, c: {0, -100, 0}, d: {-100, 0, 0}),
                  spacing_cm: 100,
-                 origin: {:xy, 0, 0}
+                 origin: {:xy, 0, 0},
+                 heading_deg: 0
                })
 
       assert map_size(missions) == 4
+      assert Enum.all?(missions, fn {_k, m} -> Mission.length(m) == 0 end)
     end
 
     test "echelon and circle and grid plan" do
@@ -172,9 +243,10 @@ defmodule Drone.FormationTest do
 
     test "uses leader pose as origin" do
       drones = [:a, :b]
-      pos = positions(a: {100, 0, 0}, b: {100, 0, 0})
+      # a at origin, b far east — centroid is (100,0), leader :a is (0,0)
+      pos = positions(a: {0, 0, 0}, b: {200, 0, 0})
 
-      assert {:ok, missions} =
+      assert {:ok, leader_plan} =
                Formation.plan(:front, %{
                  drones: drones,
                  positions: pos,
@@ -183,7 +255,17 @@ defmodule Drone.FormationTest do
                  min_separation_cm: 80
                })
 
-      assert Mission.length(missions.a) > 0 or Mission.length(missions.b) > 0
+      assert {:ok, centroid_plan} =
+               Formation.plan(:front, %{
+                 drones: drones,
+                 positions: pos,
+                 origin: :centroid,
+                 spacing_cm: 100,
+                 min_separation_cm: 80
+               })
+
+      # Leader slots (-50,0)/(50,0): b travels ~150cm. Centroid slots (50,0)/(150,0): b travels ~50cm.
+      assert forward_cm(leader_plan.b) > forward_cm(centroid_plan.b)
     end
 
     test "rejects unsupported formation" do
@@ -196,7 +278,6 @@ defmodule Drone.FormationTest do
 
     test "empty missions when already in slot" do
       drones = [:a, :b]
-      # heading 0 front with spacing 100 around origin → slots (-50,0) and (50,0)
       pos = positions(a: {-50, 0, 0}, b: {50, 0, 0})
 
       assert {:ok, missions} =
@@ -210,6 +291,44 @@ defmodule Drone.FormationTest do
 
       assert Mission.length(missions.a) == 0
       assert Mission.length(missions.b) == 0
+    end
+
+    test "accepts fractional yaw and coordinates" do
+      assert {:ok, missions} =
+               Formation.plan(:front, %{
+                 drones: [:a, :b],
+                 positions: %{
+                   a: %{x: 0.5, y: 0.0, yaw: 12.5},
+                   b: %{x: 0.0, y: 0.0, yaw: 359.9}
+                 },
+                 spacing_cm: 100,
+                 min_separation_cm: 80,
+                 origin: {:xy, 0, 0}
+               })
+
+      assert Mission.length(missions.a) > 0
+    end
+
+    test "rejects invalid options instead of raising" do
+      base = %{
+        drones: [:a, :b],
+        positions: positions(a: {0, 0, 0}, b: {0, 0, 0}),
+        origin: {:xy, 0, 0}
+      }
+
+      assert {:error, :invalid_option} = Formation.plan(:grid, Map.put(base, :columns, 0))
+      assert {:error, :invalid_option} = Formation.plan(:front, Map.put(base, :spacing_cm, 0))
+      assert {:error, :invalid_option} = Formation.plan(:echelon, Map.put(base, :side, :sideways))
+    end
+
+    test "rejects duplicate drone names" do
+      assert {:error, :duplicate_drones} =
+               Formation.plan(:front, %{
+                 drones: [:a, :a],
+                 positions: positions(a: {0, 0, 0}),
+                 spacing_cm: 100,
+                 origin: {:xy, 0, 0}
+               })
     end
   end
 end

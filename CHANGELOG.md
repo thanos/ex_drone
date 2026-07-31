@@ -9,13 +9,24 @@
 - `Drone.Formation` pure planners: `:front`, `:column`, `:vee`, `:diamond`,
   `:echelon`, `:circle`, `:shoulder_pair`, optional `:grid`
 - Coordinated `connect_sdk/1`, `takeoff/1`, `land/1`, `emergency/1`, `run/2`,
-  `telemetry/1`, and `stop/1`
-- `Swarm.run/2` supports formation atoms, `%{name => Mission.t()}`, or a custom function
+  `run/3`, `telemetry/1`, and `stop/1`
+- `Drone.Swarm.start/1` public entry (handle-returning, like `Drone.connect/2`;
+  not an OTP `start_link`)
+- `Swarm.run/3` passes formation options (`:side`, `:radius_cm`, `:columns`,
+  `:leader`, `:origin`, `:heading_deg`, etc.) through to the planner
 - Plan-time separation checks (`min_separation_cm`) for formations
 - Simulator initial pose opts: `initial_x`, `initial_y`, `initial_z`, `initial_yaw`
-- Swarm telemetry events (`[:drone, :swarm, ...]`)
+- Swarm telemetry events (`[:drone, :swarm, ...]`) including stop `reason`
 - Good Advisor / Bad Advisor example (`examples/good_bad_advisor.exs`)
-- Docs: `docs/swarm.md`, `docs/formations.md`, plus design deferred catalogue
+- Docs: `docs/swarm.md`, `docs/formations.md`, `docs/design/v0_2_0_deferred.md`
+
+### Fixed
+
+- `emergency/1` fans out from the caller (membership ETS), not blocked by `run/2`
+- Coordinator traps exits, links members, and disconnects them on shutdown/crash
+- Formation/`run` crash paths: bare `%Mission{}`, `:diamond` with ≠4 drones,
+  float yaw, invalid options, unknown mission-map keys, invalid custom returns
+- Configurable call `:timeout` (default 60s) on swarm operations
 
 ### Notes
 

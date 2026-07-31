@@ -10,9 +10,10 @@ defmodule Drone.Swarm.Supervisor do
 
   ## Example
 
-      # Prefer Drone.Swarm.start_link/1, which uses this supervisor:
+  Prefer `Drone.Swarm.start/1`, which uses this supervisor:
+
       {:ok, swarm} =
-        Drone.Swarm.start_link(
+        Drone.Swarm.start(
           name: :demo,
           members: [{:a, adapter: :sim}, {:b, adapter: :sim}]
         )
@@ -45,10 +46,6 @@ defmodule Drone.Swarm.Supervisor do
   @doc """
   Initializes the supervisor with a `:one_for_one` strategy.
 
-  ## Callback
-
-  Invoked by OTP when the supervisor starts.
-
   ## Parameters
 
     * `_opts` (`term()`) — start options (ignored)
@@ -56,15 +53,6 @@ defmodule Drone.Swarm.Supervisor do
   ## Returns
 
   `{:ok, DynamicSupervisor.sup_flags()}`
-
-  ## Example implementation
-
-  This module's implementation:
-
-      @impl true
-      def init(_opts) do
-        DynamicSupervisor.init(strategy: :one_for_one)
-      end
   """
   @impl true
   def init(_opts) do
@@ -74,7 +62,7 @@ defmodule Drone.Swarm.Supervisor do
   @doc """
   Starts a `Drone.Swarm` child under this supervisor.
 
-  Prefer `Drone.Swarm.start_link/1`, which wraps this call and returns a
+  Prefer `Drone.Swarm.start/1`, which wraps this call and returns a
   swarm handle (`name` or `pid`).
 
   ## Parameters
@@ -102,8 +90,9 @@ defmodule Drone.Swarm.Supervisor do
   @doc """
   Terminates a swarm coordinator by pid.
 
-  Does not automatically disconnect members; use `Drone.Swarm.stop/2`
-  for that.
+  Because the swarm traps exits, termination runs `Drone.Swarm` cleanup and
+  disconnects members by default (same as `Drone.Swarm.stop/1`). Prefer
+  `Drone.Swarm.stop/2` when you need `disconnect: false`.
 
   ## Parameters
 

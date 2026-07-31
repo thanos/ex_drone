@@ -50,7 +50,7 @@ swarm telemetry or failure policy.
 ### 2. Swarm GenServer owning member list
 
 ```elixir
-{:ok, swarm} = Drone.Swarm.start_link([{:good, adapter: :sim}, {:bad, adapter: :sim}])
+{:ok, swarm} = Drone.Swarm.start([{:good, adapter: :sim}, {:bad, adapter: :sim}])
 ```
 
 Pros: matches the prompt API; holds formation state; can supervise group

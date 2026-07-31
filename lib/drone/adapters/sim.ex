@@ -73,9 +73,15 @@ defmodule Drone.Adapters.Sim do
   end
 
   @impl Drone.Adapter
-  def command(%State{} = state, %Command{type: :emergency}) do
-    new_state = %{state | mode: :emergency, flying: false}
-    {:ok, :ok, State.push_command(new_state, Command.emergency())}
+  def command(%State{} = state, %Command{type: :emergency} = cmd) do
+    case check_failure(state, cmd) do
+      :ok ->
+        new_state = %{state | mode: :emergency, flying: false}
+        {:ok, :ok, State.push_command(new_state, Command.emergency())}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
   end
 
   def command(%State{} = state, %Command{} = cmd) do

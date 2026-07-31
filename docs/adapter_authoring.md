@@ -80,6 +80,7 @@ Your adapter must handle (or gracefully reject) all command types:
 - The `state` term is opaque. Use a struct for clarity.
 - Always return `new_state` from `command/2`, even on error.
 - The `telemetry/1` callback should return at minimum: `x`, `y`, `z`, `yaw`, `battery`, `flying`, `mode`.
+- Swarm formations (`Drone.Swarm.run/2` with a formation atom) require `:x` and `:y` in telemetry. Adapters that omit position keys will get `{:error, {name, :position_unavailable}}` from formation runs.
 
 ### 5. Error Conventions
 

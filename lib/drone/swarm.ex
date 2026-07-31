@@ -13,7 +13,7 @@ defmodule Drone.Swarm do
   ## Quick start
 
       {:ok, swarm} =
-        Drone.Swarm.start_link(
+        Drone.Swarm.start(
           name: :advisors,
           members: [
             {:good, adapter: :sim, initial_x: 0, initial_y: 0},
@@ -32,7 +32,7 @@ defmodule Drone.Swarm do
   Member-list sugar (anonymous swarm, returns a pid):
 
       {:ok, swarm} =
-        Drone.Swarm.start_link([
+        Drone.Swarm.start([
           {:left, adapter: :sim, initial_x: -50},
           {:right, adapter: :sim, initial_x: 50}
         ])
@@ -48,6 +48,9 @@ defmodule Drone.Swarm do
   the first error. Already-completed members are not undone; call `land/1` or
   `emergency/1` explicitly.
 
+  `emergency/1` fans out from the caller process using a membership table, so
+  it is not blocked by an in-flight `run/2` or other coordinated call.
+
   ## See also
 
   * `Drone.Formation` — formation planners
@@ -59,10 +62,15 @@ defmodule Drone.Swarm do
 
   alias Drone.{Formation, Mission, Telemetry}
 
+  @members_table Drone.Swarm.Members
+  @default_spacing_cm 100
+  @default_min_separation_cm 80
+  @default_timeout 60_000
+
   @typedoc """
   Handle used to address a running swarm.
 
-  * `atom()` — registered name passed as `:name` to `start_link/1`
+  * `atom()` — registered name passed as `:name` to `start/1`
     (looked up via `Drone.Swarm.Registry`), e.g. `:advisors`
   * `pid()` — process id of an anonymous swarm
 
@@ -102,7 +110,7 @@ defmodule Drone.Swarm do
   @type results :: %{optional(atom()) => member_result()}
 
   @typedoc """
-  Options accepted by `start_link/1` after normalization.
+  Options accepted by `start/1` after normalization.
 
   ## Fields / keys
 
@@ -113,7 +121,7 @@ defmodule Drone.Swarm do
   | `:spacing_cm` | `pos_integer()` | `100` | Neighbor spacing for formations |
   | `:min_separation_cm` | `pos_integer()` | `80` | Plan-time Separate check |
   | `:heading_deg` | `integer()` | `0` | Formation travel heading (yaw 0 = +Y) |
-  | `:policy` | `:fail_fast` | `:fail_fast` | Fan-out policy (only fail-fast shipped) |
+  | `:timeout` | `timeout()` | `60_000` | Default `GenServer.call` timeout for ops |
 
   Each member keyword list is passed to `Drone.connect/2` (plus `:name`).
   Common member opts: `:adapter` (`:sim` \| `:tello` \| module),
@@ -133,36 +141,45 @@ defmodule Drone.Swarm do
         heading_deg: 0
       ]
   """
-  @type start_opts :: keyword()
+  @type start_opts :: [
+          {:name, atom()}
+          | {:members, [{atom(), keyword()}]}
+          | {:spacing_cm, pos_integer()}
+          | {:min_separation_cm, pos_integer()}
+          | {:heading_deg, integer()}
+          | {:timeout, timeout()}
+        ]
 
-  @default_spacing_cm 100
-  @default_min_separation_cm 80
+  @doc false
+  @spec members_table() :: atom()
+  def members_table, do: @members_table
 
   @doc """
   Returns the child specification used by `Drone.Swarm.Supervisor`.
 
   ## Parameters
 
-    * `opts` (`keyword()`) — swarm start options (see `t:start_opts/0`)
+    * `opts` (`t:start_opts/0`) — swarm start options
 
   ## Returns
 
-  A supervisor child spec map with `:temporary` restart.
+  A supervisor child spec map with `:temporary` restart and a shutdown
+  allowance for member disconnects.
 
   ## Example
 
       Drone.Swarm.child_spec(name: :demo, members: [{:a, adapter: :sim}, {:b, adapter: :sim}])
   """
-  @spec child_spec(keyword()) :: Supervisor.child_spec()
+  @spec child_spec(start_opts()) :: Supervisor.child_spec()
   def child_spec(opts) do
     opts = normalize_opts(opts)
-    id = Keyword.get(opts, :name) || {:swarm, System.unique_integer([:positive])}
 
     %{
-      id: id,
+      id: __MODULE__,
       start: {__MODULE__, :start_genserver, [opts]},
       restart: :temporary,
-      type: :worker
+      type: :worker,
+      shutdown: 10_000
     }
   end
 
@@ -172,14 +189,18 @@ defmodule Drone.Swarm do
   Accepts either:
 
   1. A keyword list with `:members` and optional swarm options
-  2. A bare member list `[{name, opts}, ...]` (prompt-style sugar)
+  2. A bare member list `[{name, opts}, ...]` or `[name, ...]` (defaults to `:sim`)
 
   Members are started via `Drone.connect/2` under `Drone.Supervisor`.
   The swarm process itself is started under `Drone.Swarm.Supervisor`.
 
+  Like `Drone.connect/2`, this returns a swarm **handle** (`:name` or `pid`)
+  and does not link the caller. Use `child_spec/1` under your own supervisor
+  when you need OTP linking/restart semantics.
+
   ## Parameters
 
-    * `arg` (`keyword() | [{atom(), keyword()}]`) — start options or member list
+    * `arg` (`t:start_opts/0 | [{atom(), keyword()}] | [atom()]`) — start options or member list
 
   ## Returns
 
@@ -190,7 +211,7 @@ defmodule Drone.Swarm do
   ## Examples
 
       {:ok, :advisors} =
-        Drone.Swarm.start_link(
+        Drone.Swarm.start(
           name: :advisors,
           members: [
             {:good, adapter: :sim, initial_x: 0},
@@ -199,14 +220,14 @@ defmodule Drone.Swarm do
         )
 
       {:ok, pid} =
-        Drone.Swarm.start_link([
+        Drone.Swarm.start([
           {:left, adapter: :sim, initial_x: -50},
           {:right, adapter: :sim, initial_x: 50}
         ])
   """
-  @spec start_link(keyword() | [{atom(), keyword()}]) ::
+  @spec start(start_opts() | [{atom(), keyword()}] | [atom()]) ::
           {:ok, swarm()} | {:error, term()}
-  def start_link(arg) do
+  def start(arg) do
     opts = normalize_opts(arg)
 
     case Drone.Swarm.Supervisor.start_swarm(opts) do
@@ -260,13 +281,14 @@ defmodule Drone.Swarm do
 
   ## Returns
 
-  A list of atoms in membership order, e.g. `[:good, :bad]`.
+    * `{:ok, [atom()]}` — membership order, e.g. `{:ok, [:good, :bad]}`
+    * `{:error, :not_found}` — unknown swarm
 
   ## Example
 
-      [:good, :bad] = Drone.Swarm.members(:advisors)
+      {:ok, [:good, :bad]} = Drone.Swarm.members(:advisors)
   """
-  @spec members(swarm()) :: [atom()] | {:error, :not_found}
+  @spec members(swarm()) :: {:ok, [atom()]} | {:error, :not_found}
   def members(swarm), do: call(swarm, :members)
 
   @doc """
@@ -275,19 +297,21 @@ defmodule Drone.Swarm do
   ## Parameters
 
     * `swarm` (`t:swarm/0`) — swarm name or pid
+    * `opts` (`keyword()`) — `:timeout` overrides the swarm default
 
   ## Returns
 
     * `{:ok, results()}` — all members entered SDK mode
     * `{:error, :partial, results()}` — stopped after first failure
+    * `{:error, :not_found}`
 
   ## Example
 
       {:ok, %{good: :ok, bad: :ok}} = Drone.Swarm.connect_sdk(:advisors)
   """
-  @spec connect_sdk(swarm()) ::
+  @spec connect_sdk(swarm(), keyword()) ::
           {:ok, results()} | {:error, :partial, results()} | {:error, :not_found}
-  def connect_sdk(swarm), do: call(swarm, {:fan_out, :connect_sdk})
+  def connect_sdk(swarm, opts \\ []), do: call(swarm, {:fan_out, :connect_sdk}, opts)
 
   @doc """
   Coordinated takeoff for every member (fail-fast).
@@ -297,19 +321,21 @@ defmodule Drone.Swarm do
   ## Parameters
 
     * `swarm` (`t:swarm/0`) — swarm name or pid
+    * `opts` (`keyword()`) — `:timeout` overrides the swarm default
 
   ## Returns
 
     * `{:ok, results()}`
     * `{:error, :partial, results()}`
+    * `{:error, :not_found}`
 
   ## Example
 
       {:ok, _} = Drone.Swarm.takeoff(:advisors)
   """
-  @spec takeoff(swarm()) ::
+  @spec takeoff(swarm(), keyword()) ::
           {:ok, results()} | {:error, :partial, results()} | {:error, :not_found}
-  def takeoff(swarm), do: call(swarm, {:fan_out, :takeoff})
+  def takeoff(swarm, opts \\ []), do: call(swarm, {:fan_out, :takeoff}, opts)
 
   @doc """
   Coordinated land for every member (fail-fast).
@@ -317,25 +343,29 @@ defmodule Drone.Swarm do
   ## Parameters
 
     * `swarm` (`t:swarm/0`) — swarm name or pid
+    * `opts` (`keyword()`) — `:timeout` overrides the swarm default
 
   ## Returns
 
     * `{:ok, results()}`
     * `{:error, :partial, results()}`
+    * `{:error, :not_found}`
 
   ## Example
 
       {:ok, _} = Drone.Swarm.land(:advisors)
   """
-  @spec land(swarm()) ::
+  @spec land(swarm(), keyword()) ::
           {:ok, results()} | {:error, :partial, results()} | {:error, :not_found}
-  def land(swarm), do: call(swarm, {:fan_out, :land})
+  def land(swarm, opts \\ []), do: call(swarm, {:fan_out, :land}, opts)
 
   @doc """
   Emergency-stops every member (best-effort; does not fail-fast).
 
-  Continues through all members even if one fails. Bypasses normal safety
-  on each vehicle.
+  Fans out **from the caller process** using the swarm membership table, so
+  this is not queued behind an in-flight `run/2`, `takeoff/1`, or other
+  coordinator call. Continues through all members even if one fails. Bypasses
+  normal safety on each vehicle.
 
   ## Parameters
 
@@ -345,13 +375,29 @@ defmodule Drone.Swarm do
 
     * `{:ok, results()}` — always returns the full per-member map when the
       swarm exists
+    * `{:error, :not_found}`
 
   ## Example
 
       {:ok, %{good: :ok, bad: :ok}} = Drone.Swarm.emergency(:advisors)
   """
   @spec emergency(swarm()) :: {:ok, results()} | {:error, :not_found}
-  def emergency(swarm), do: call(swarm, :emergency)
+  def emergency(swarm) do
+    case lookup_members(swarm) do
+      {:ok, name, drones} ->
+        Telemetry.emit_swarm_emergency(name, drones)
+
+        results =
+          Map.new(drones, fn member ->
+            {member, normalize_result(Drone.emergency(member))}
+          end)
+
+        {:ok, results}
+
+      {:error, _} = err ->
+        err
+    end
+  end
 
   @doc """
   Returns a map of telemetry snapshots for every member.
@@ -359,6 +405,7 @@ defmodule Drone.Swarm do
   ## Parameters
 
     * `swarm` (`t:swarm/0`) — swarm name or pid
+    * `opts` (`keyword()`) — `:timeout` overrides the swarm default
 
   ## Returns
 
@@ -373,34 +420,42 @@ defmodule Drone.Swarm do
       tel.good.flying
       #=> true
   """
-  @spec telemetry(swarm()) ::
+  @spec telemetry(swarm(), keyword()) ::
           {:ok, %{atom() => map()}} | {:error, term()}
-  def telemetry(swarm), do: call(swarm, :telemetry)
+  def telemetry(swarm, opts \\ []), do: call(swarm, :telemetry, opts)
 
   @doc """
   Runs a formation, a per-drone mission map, or a custom function.
+
+  When `target` is a formation atom, `opts` may include formation planner
+  options (`:heading_deg`, `:spacing_cm`, `:min_separation_cm`, `:leader`,
+  `:origin`, `:side`, `:radius_cm`, `:columns`) which override swarm defaults.
+  Use `:timeout` to override the call timeout.
 
   ## Parameters
 
     * `swarm` (`t:swarm/0`) — swarm name or pid
     * `target` — one of:
       * `Drone.Formation.formation()` — e.g. `:front`, `:vee`, `:circle`
-      * `%{atom() => Drone.Mission.t()}` — per-member missions (fail-fast order
-        follows membership, then any extra keys)
+      * `%{atom() => Drone.Mission.t()}` — per-member missions (membership order;
+        unknown keys are rejected before any flight)
       * `(map() -> term())` — function receiving `%{name => name}` member map;
-        return `:ok`, `{:ok, term()}`, or `{:error, term()}`
+        must return `:ok`, `{:ok, term()}`, or `{:error, term()}`
+    * `opts` (`keyword()`) — formation and/or `:timeout` options
 
   ## Returns
 
     * `{:ok, results()}` — all members succeeded (or custom function returned ok)
     * `{:error, :partial, results()}` — fail-fast stop during mission execution
     * `{:error, reason}` — plan-time error such as `:separation_violation`,
-      `:too_few_drones`, `:unsupported_formation`, `:unsupported_run_target`
+      `:too_few_drones`, `:unsupported_formation`, `:unsupported_run_target`,
+      `{:unknown_members, [atom()]}`, `{:invalid_run_result, term()}`
     * `{:error, :not_found}` — unknown swarm
 
   ## Examples
 
       {:ok, _} = Drone.Swarm.run(swarm, :front)
+      {:ok, _} = Drone.Swarm.run(swarm, :echelon, side: :left, heading_deg: 90)
 
       good = Drone.Mission.new() |> Drone.Mission.move(:forward, 40)
       bad = Drone.Mission.new() |> Drone.Mission.move(:up, 200)
@@ -414,12 +469,16 @@ defmodule Drone.Swarm do
   """
   @spec run(
           swarm(),
-          Formation.formation() | %{atom() => Mission.t()} | (map() -> term())
+          Formation.formation() | %{atom() => Mission.t()} | (map() -> term()),
+          keyword()
         ) ::
           {:ok, results()}
           | {:error, term()}
           | {:error, :partial, results()}
-  def run(swarm, target), do: call(swarm, {:run, target})
+  def run(swarm, target, opts \\ []) do
+    {timeout_opts, formation_opts} = Keyword.split(opts, [:timeout])
+    call(swarm, {:run, target, formation_opts}, timeout_opts)
+  end
 
   @doc """
   Stops the swarm process.
@@ -432,6 +491,7 @@ defmodule Drone.Swarm do
     * `swarm` (`t:swarm/0`) — swarm name or pid
     * `opts` (`keyword()`) — options:
       * `:disconnect` (`boolean()`, default `true`) — disconnect members
+      * `:timeout` (`timeout()`) — call timeout
 
   ## Returns
 
@@ -445,86 +505,64 @@ defmodule Drone.Swarm do
   """
   @spec stop(swarm(), keyword()) :: :ok | {:error, term()}
   def stop(swarm, opts \\ []) do
-    call(swarm, {:stop, opts})
+    call(swarm, {:stop, opts}, opts)
   end
 
   @impl GenServer
   def init(opts) do
+    Process.flag(:trap_exit, true)
+
     members = Keyword.fetch!(opts, :members)
     name = Keyword.get(opts, :name)
 
     case connect_members(members) do
       {:ok, drones} ->
+        member_pids = link_members(drones)
+
         state = %{
           name: name,
-          members: members,
           drones: drones,
+          member_pids: member_pids,
           spacing_cm: Keyword.get(opts, :spacing_cm, @default_spacing_cm),
           min_separation_cm: Keyword.get(opts, :min_separation_cm, @default_min_separation_cm),
           heading_deg: Keyword.get(opts, :heading_deg, 0),
-          policy: Keyword.get(opts, :policy, :fail_fast)
+          timeout: Keyword.get(opts, :timeout, @default_timeout),
+          disconnect_on_stop: true
         }
 
+        :ets.insert(@members_table, {self(), {name, drones, state.timeout}})
         Telemetry.emit_swarm_start(name, drones)
         {:ok, state}
 
       {:error, reason, connected} ->
-        Enum.each(connected, &Drone.disconnect/1)
+        Enum.each(connected, &safe_disconnect/1)
         {:stop, reason}
     end
   end
 
   @impl GenServer
-  def terminate(_reason, %{name: name, drones: drones} = state) do
-    Telemetry.emit_swarm_stop(name, drones)
+  def terminate(reason, %{name: name, drones: drones} = state) do
+    Telemetry.emit_swarm_stop(name, drones, reason)
 
     if Map.get(state, :disconnect_on_stop, true) do
-      Enum.each(drones, fn drone ->
-        try do
-          Drone.disconnect(drone)
-        rescue
-          _ -> :ok
-        catch
-          :exit, _ -> :ok
-        end
-      end)
+      Enum.each(drones, &safe_disconnect/1)
+    else
+      Enum.each(Map.keys(Map.get(state, :member_pids, %{})), &Process.unlink/1)
     end
 
+    :ets.delete(@members_table, self())
     :ok
   end
 
   @impl GenServer
   def handle_call(:members, _from, state) do
-    {:reply, state.drones, state}
+    {:reply, {:ok, state.drones}, state}
   end
 
   def handle_call({:fan_out, op}, _from, state) do
-    start = System.monotonic_time()
-    Telemetry.emit_swarm_command_start(state.name, state.drones, op)
-
-    result = fan_out_fail_fast(state.drones, &apply_member_op(op, &1))
-    duration = System.monotonic_time() - start
-
-    case result do
-      {:ok, _} = ok ->
-        Telemetry.emit_swarm_command_stop(state.name, state.drones, op, duration)
-        {:reply, ok, state}
-
-      {:error, :partial, _} = err ->
-        Telemetry.emit_swarm_command_error(state.name, state.drones, op, :partial, duration)
-        {:reply, err, state}
-    end
-  end
-
-  def handle_call(:emergency, _from, state) do
-    Telemetry.emit_swarm_emergency(state.name, state.drones)
-
-    results =
-      Map.new(state.drones, fn name ->
-        {name, normalize_result(Drone.emergency(name))}
-      end)
-
-    {:reply, {:ok, results}, state}
+    reply_with_telemetry(state, op, fn ->
+      fan_out_fail_fast(state.drones, &apply_member_op(op, &1))
+    end)
   end
 
   def handle_call(:telemetry, _from, state) do
@@ -542,80 +580,93 @@ defmodule Drone.Swarm do
     end
   end
 
-  def handle_call({:run, target}, _from, state) do
-    start = System.monotonic_time()
-    Telemetry.emit_swarm_command_start(state.name, state.drones, :run)
-
-    result = do_run(target, state)
-    duration = System.monotonic_time() - start
-
-    case result do
-      {:ok, _} = ok ->
-        Telemetry.emit_swarm_command_stop(state.name, state.drones, :run, duration)
-        {:reply, ok, state}
-
-      {:error, :partial, _} = err ->
-        Telemetry.emit_swarm_command_error(state.name, state.drones, :run, :partial, duration)
-        {:reply, err, state}
-
-      {:error, reason} = err ->
-        Telemetry.emit_swarm_command_error(state.name, state.drones, :run, reason, duration)
-        {:reply, err, state}
-    end
+  def handle_call({:run, target, formation_opts}, _from, state) do
+    reply_with_telemetry(state, :run, fn ->
+      do_run(target, state, formation_opts)
+    end)
   end
 
   def handle_call({:stop, opts}, _from, state) do
     disconnect? = Keyword.get(opts, :disconnect, true)
-    new_state = Map.put(state, :disconnect_on_stop, disconnect?)
-
-    if disconnect? do
-      Enum.each(state.drones, fn drone ->
-        _ = Drone.disconnect(drone)
-      end)
-    end
-
-    {:stop, :normal, :ok, %{new_state | disconnect_on_stop: false}}
+    {:stop, :normal, :ok, %{state | disconnect_on_stop: disconnect?}}
   end
 
-  defp do_run(fun, state) when is_function(fun, 1) do
+  @impl GenServer
+  def handle_info({:EXIT, pid, _reason}, state) do
+    case Map.pop(state.member_pids, pid) do
+      {nil, _} ->
+        {:noreply, state}
+
+      {name, member_pids} ->
+        drones = List.delete(state.drones, name)
+        :ets.insert(@members_table, {self(), {state.name, drones, state.timeout}})
+        {:noreply, %{state | drones: drones, member_pids: member_pids}}
+    end
+  end
+
+  def handle_info(_msg, state), do: {:noreply, state}
+
+  defp do_run(%Mission{}, _state, _opts), do: {:error, :unsupported_run_target}
+
+  defp do_run(fun, state, _opts) when is_function(fun, 1) do
     members = Map.new(state.drones, &{&1, &1})
 
     case fun.(members) do
       :ok -> {:ok, Map.new(state.drones, &{&1, :ok})}
       {:ok, _} = ok -> ok
       {:error, _} = err -> err
-      other -> {:ok, %{result: other}}
+      {:error, :safety, reason} -> {:error, {:safety, reason}}
+      other -> {:error, {:invalid_run_result, other}}
     end
   end
 
-  defp do_run(missions, state) when is_map(missions) do
-    ordered =
-      Enum.filter(state.drones, &Map.has_key?(missions, &1)) ++
-        Enum.reject(Map.keys(missions), &(&1 in state.drones))
+  defp do_run(missions, state, _opts) when is_map(missions) do
+    unknown = Map.keys(missions) -- state.drones
 
-    fan_out_fail_fast(ordered, fn name ->
-      case Map.fetch(missions, name) do
-        {:ok, %Mission{} = mission} -> run_mission(mission, name)
-        :error -> {:error, :missing_mission}
-      end
-    end)
+    cond do
+      unknown != [] ->
+        {:error, {:unknown_members, unknown}}
+
+      not Enum.all?(missions, fn {_k, v} -> match?(%Mission{}, v) end) ->
+        {:error, :unsupported_run_target}
+
+      true ->
+        ordered = Enum.filter(state.drones, &Map.has_key?(missions, &1))
+
+        fan_out_fail_fast(ordered, fn name ->
+          run_mission(Map.fetch!(missions, name), name)
+        end)
+    end
   end
 
-  defp do_run(formation, state) when is_atom(formation) do
+  defp do_run(formation, state, opts) when is_atom(formation) do
+    plan_opts =
+      %{
+        drones: state.drones,
+        heading_deg: Keyword.get(opts, :heading_deg, state.heading_deg),
+        spacing_cm: Keyword.get(opts, :spacing_cm, state.spacing_cm),
+        min_separation_cm: Keyword.get(opts, :min_separation_cm, state.min_separation_cm)
+      }
+      |> maybe_put(opts, :leader)
+      |> maybe_put(opts, :origin)
+      |> maybe_put(opts, :side)
+      |> maybe_put(opts, :radius_cm)
+      |> maybe_put(opts, :columns)
+
     with {:ok, positions} <- member_positions(state.drones),
-         {:ok, missions} <-
-           Formation.plan(formation, %{
-             drones: state.drones,
-             positions: positions,
-             heading_deg: state.heading_deg,
-             spacing_cm: state.spacing_cm,
-             min_separation_cm: state.min_separation_cm
-           }) do
-      do_run(missions, state)
+         {:ok, missions} <- Formation.plan(formation, Map.put(plan_opts, :positions, positions)) do
+      do_run(missions, state, [])
     end
   end
 
-  defp do_run(_other, _state), do: {:error, :unsupported_run_target}
+  defp do_run(_other, _state, _opts), do: {:error, :unsupported_run_target}
+
+  defp maybe_put(map, opts, key) do
+    case Keyword.fetch(opts, key) do
+      {:ok, value} -> Map.put(map, key, value)
+      :error -> map
+    end
+  end
 
   defp member_positions(drones) do
     Enum.reduce_while(drones, %{}, fn name, acc ->
@@ -628,6 +679,9 @@ defmodule Drone.Swarm do
              z: Map.get(tel, :z, 0),
              yaw: Map.get(tel, :yaw, 0)
            })}
+
+        {:ok, _tel} ->
+          {:halt, {:error, {name, :position_unavailable}}}
 
         {:error, reason} ->
           {:halt, {:error, {name, reason}}}
@@ -676,6 +730,27 @@ defmodule Drone.Swarm do
     end
   end
 
+  defp reply_with_telemetry(state, op, fun) do
+    start = System.monotonic_time()
+    Telemetry.emit_swarm_command_start(state.name, state.drones, op)
+    result = fun.()
+    duration = System.monotonic_time() - start
+
+    case result do
+      {:ok, _} = ok ->
+        Telemetry.emit_swarm_command_stop(state.name, state.drones, op, duration)
+        {:reply, ok, state}
+
+      {:error, :partial, _} = err ->
+        Telemetry.emit_swarm_command_error(state.name, state.drones, op, :partial, duration)
+        {:reply, err, state}
+
+      {:error, reason} = err ->
+        Telemetry.emit_swarm_command_error(state.name, state.drones, op, reason, duration)
+        {:reply, err, state}
+    end
+  end
+
   defp connect_members(members) do
     Enum.reduce_while(members, {:ok, []}, fn {name, member_opts}, {:ok, connected} ->
       adapter = Keyword.get(member_opts, :adapter, :sim)
@@ -695,10 +770,56 @@ defmodule Drone.Swarm do
     end
   end
 
-  defp call(swarm, message) do
-    case resolve(swarm) do
+  defp link_members(drones) do
+    Enum.reduce(drones, %{}, fn name, acc ->
+      case Drone.Vehicle.whereis(name) do
+        pid when is_pid(pid) ->
+          Process.link(pid)
+          Map.put(acc, pid, name)
+
+        nil ->
+          acc
+      end
+    end)
+  end
+
+  defp safe_disconnect(drone) do
+    Drone.disconnect(drone)
+  rescue
+    _ -> :ok
+  catch
+    :exit, _ -> :ok
+  end
+
+  defp lookup_members(pid) when is_pid(pid) do
+    case :ets.lookup(@members_table, pid) do
+      [{^pid, {name, drones, _timeout}}] -> {:ok, name, drones}
+      [] -> {:error, :not_found}
+    end
+  end
+
+  defp lookup_members(name) when is_atom(name) do
+    case whereis(name) do
       nil -> {:error, :not_found}
-      pid -> GenServer.call(pid, message, 60_000)
+      pid -> lookup_members(pid)
+    end
+  end
+
+  defp call(swarm, message, opts \\ []) do
+    case resolve(swarm) do
+      nil ->
+        {:error, :not_found}
+
+      pid ->
+        timeout = Keyword.get_lazy(opts, :timeout, fn -> stored_timeout(pid) end)
+        GenServer.call(pid, message, timeout)
+    end
+  end
+
+  defp stored_timeout(pid) do
+    case :ets.lookup(@members_table, pid) do
+      [{^pid, {_name, _drones, timeout}}] -> timeout
+      [] -> @default_timeout
     end
   end
 
@@ -721,12 +842,16 @@ defmodule Drone.Swarm do
       members
       |> Keyword.put_new(:spacing_cm, @default_spacing_cm)
       |> Keyword.put_new(:min_separation_cm, @default_min_separation_cm)
+      |> Keyword.put_new(:heading_deg, 0)
+      |> Keyword.put_new(:timeout, @default_timeout)
       |> normalize_member_entries()
     else
       [
         members: normalize_member_list(members),
         spacing_cm: @default_spacing_cm,
-        min_separation_cm: @default_min_separation_cm
+        min_separation_cm: @default_min_separation_cm,
+        heading_deg: 0,
+        timeout: @default_timeout
       ]
     end
   end

@@ -4,11 +4,15 @@
 normal `Drone.Vehicle` with its own safety pipeline. The swarm adds
 membership, coordinated fan-out, and formation planning.
 
+`Drone.Swarm.start/1` mirrors `Drone.connect/2`: it returns a handle
+(`:name` or `pid`) and does not link the caller. Use `child_spec/1` under
+your own supervisor when you need OTP linking.
+
 ## Quick start
 
 ```elixir
 {:ok, swarm} =
-  Drone.Swarm.start_link([
+  Drone.Swarm.start([
     {:good, adapter: :sim, initial_x: -50},
     {:bad, adapter: :sim, initial_x: 50}
   ])
@@ -24,7 +28,7 @@ Named swarms are registered under `Drone.Swarm.Registry`:
 
 ```elixir
 {:ok, :advisors} =
-  Drone.Swarm.start_link(
+  Drone.Swarm.start(
     name: :advisors,
     members: [
       {:a, adapter: :sim, initial_x: 0},
@@ -42,8 +46,8 @@ Drone.Swarm.whereis(:advisors)
 | `connect_sdk/1` | Fan-out SDK mode |
 | `takeoff/1` | Coordinated takeoff |
 | `land/1` | Coordinated land |
-| `emergency/1` | Best-effort emergency on all members |
-| `run/2` | Formation, mission map, or custom function |
+| `emergency/1` | Best-effort emergency on all members (not blocked by `run/2`) |
+| `run/2` / `run/3` | Formation, mission map, or custom function |
 | `telemetry/1` | Map of per-member telemetry |
 | `stop/1` | Stop swarm (disconnects members by default) |
 
@@ -55,12 +59,14 @@ Default fan-out policy is **fail-fast**:
 ```
 
 Already-completed members are not undone. Call `land/1` or `emergency/1`
-explicitly after a partial failure.
+explicitly after a partial failure. Coordinated calls default to a 60s
+timeout; override with `timeout:` on the call or when starting the swarm.
 
 ## Running missions
 
 ```elixir
 Drone.Swarm.run(swarm, :vee)
+Drone.Swarm.run(swarm, :echelon, side: :left)
 
 Drone.Swarm.run(swarm, %{
   good: good_mission,

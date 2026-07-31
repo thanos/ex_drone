@@ -321,17 +321,19 @@ defmodule Drone.Telemetry do
 
     * `swarm` (`atom() | nil`)
     * `members` (`[atom()]`)
+    * `reason` (`term()`, optional) — OTP terminate reason (`:normal`,
+      `:shutdown`, crash reason, etc.)
 
   ## Returns
 
   `:ok`
   """
-  @spec emit_swarm_stop(atom() | nil, [atom()]) :: :ok
-  def emit_swarm_stop(swarm, members) do
+  @spec emit_swarm_stop(atom() | nil, [atom()], term()) :: :ok
+  def emit_swarm_stop(swarm, members, reason \\ :normal) do
     :telemetry.execute(
       [:drone, :swarm, :stop],
       %{timestamp: System.monotonic_time()},
-      %{swarm: swarm, members: members}
+      %{swarm: swarm, members: members, reason: reason}
     )
   end
 

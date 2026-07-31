@@ -56,10 +56,19 @@ Moves shorter than 20 cm are skipped (Tello/SDK minimum distance).
 Drone.Swarm.run(swarm, :front)
 Drone.Swarm.run(swarm, :column)
 Drone.Swarm.run(swarm, :vee)
+Drone.Swarm.run(swarm, :echelon, side: :left, heading_deg: 90)
+Drone.Swarm.run(swarm, :circle, radius_cm: 150)
+Drone.Swarm.run(swarm, :grid, columns: 2)
 ```
 
-Swarm spacing defaults come from `start_link` options `:spacing_cm` and
-`:min_separation_cm`.
+Swarm spacing defaults come from `start` options `:spacing_cm` and
+`:min_separation_cm`. Pass formation options as the third argument to
+`Drone.Swarm.run/3` to override them per call (`:leader`, `:origin`, `:side`,
+`:radius_cm`, `:columns`, `:heading_deg`, etc.).
+
+Planned slots are checked for separation; flight paths between slots are not
+deconflicted (two drones may cross while relocating). Live collision avoidance
+is deferred.
 
 ## Not included
 

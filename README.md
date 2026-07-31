@@ -56,7 +56,7 @@ Coordinate multiple simulated drones with `Drone.Swarm`:
 
 ```elixir
 {:ok, swarm} =
-  Drone.Swarm.start_link([
+  Drone.Swarm.start([
     {:good, adapter: :sim, initial_x: -50},
     {:bad, adapter: :sim, initial_x: 50}
   ])

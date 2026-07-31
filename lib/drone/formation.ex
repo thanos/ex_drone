@@ -160,8 +160,12 @@ defmodule Drone.Formation do
   * `:separation_violation` — two planned slots closer than `min_separation_cm`
   * `:unsupported_formation` — unknown formation atom
   * `:too_few_drones` — membership below the formation minimum
+  * `:too_many_drones` — membership above a formation maximum (e.g. `:diamond`)
+  * `:duplicate_drones` — repeated names in `:drones`
+  * `:invalid_option` — bad spacing, columns, side, heading, etc.
   * `:leader_unavailable` — `:leader` missing from `:positions`
   * `:missing_positions` — a member lacks `:x`/`:y`
+  * `:unassigned_slot` — planner/assembly mismatch (should not occur)
 
   ## Example
 
@@ -171,17 +175,42 @@ defmodule Drone.Formation do
           :separation_violation
           | :unsupported_formation
           | :too_few_drones
+          | :too_many_drones
+          | :duplicate_drones
+          | :invalid_option
           | :leader_unavailable
           | :missing_positions
+          | :unassigned_slot
 
   @min_move_cm 20
   @max_move_cm 500
+
+  @min_drones %{
+    front: 2,
+    column: 2,
+    vee: 3,
+    diamond: 4,
+    echelon: 2,
+    circle: 3,
+    shoulder_pair: 2,
+    grid: 2
+  }
+
+  @max_drones %{
+    diamond: 4,
+    shoulder_pair: 2
+  }
 
   @doc """
   Plans missions that move each drone into the given formation.
 
   Pure function: no processes, no I/O. Returns missions; callers execute them
   (e.g. via `Drone.Swarm.run/2` or `Drone.Mission.run/2`).
+
+  Positions accept numeric `:x`/`:y`/`:yaw`; values are rounded to integers
+  before path generation. Moves shorter than 20 cm are skipped (SDK minimum);
+  longer legs are split into segments of at most 500 cm with any remainder
+  redistributed so the planned slot is reached exactly.
 
   ## Parameters
 
@@ -219,26 +248,26 @@ defmodule Drone.Formation do
           {:ok, %{atom() => Mission.t()}} | {:error, plan_error()}
   def plan(formation, opts) when is_list(opts), do: plan(formation, Map.new(opts))
 
-  def plan(:shoulder_pair, opts), do: plan(:front, opts)
+  def plan(:shoulder_pair, opts) when is_map(opts) do
+    with {:ok, drones} <- fetch_drones(opts),
+         :ok <- check_drone_count(:shoulder_pair, drones) do
+      plan(:front, opts)
+    end
+  end
 
   def plan(formation, opts) when is_map(opts) do
     with {:ok, drones} <- fetch_drones(opts),
-         :ok <- check_min_drones(formation, drones),
+         :ok <- check_duplicates(drones),
+         :ok <- check_drone_count(formation, drones),
+         {:ok, opts} <- validate_opts(formation, opts),
          {:ok, positions} <- fetch_positions(drones, opts),
          {:ok, origin} <- resolve_origin(drones, positions, opts),
-         heading <- Map.get(opts, :heading_deg, 0),
-         spacing <- Map.get(opts, :spacing_cm, 100),
-         min_sep <- Map.get(opts, :min_separation_cm, 80),
+         heading = Map.fetch!(opts, :heading_deg),
+         spacing = Map.fetch!(opts, :spacing_cm),
+         min_sep = Map.fetch!(opts, :min_separation_cm),
          {:ok, slots} <- compute_slots(formation, drones, origin, heading, spacing, opts),
          :ok <- check_separation(slots, min_sep) do
-      missions =
-        Map.new(drones, fn name ->
-          pos = Map.fetch!(positions, name)
-          {tx, ty} = Map.fetch!(slots, name)
-          {name, path_mission(pos, tx, ty)}
-        end)
-
-      {:ok, missions}
+      build_missions(drones, positions, slots)
     end
   end
 
@@ -247,45 +276,108 @@ defmodule Drone.Formation do
   defp fetch_drones(%{drones: drones}) when is_list(drones) and drones != [], do: {:ok, drones}
   defp fetch_drones(_), do: {:error, :too_few_drones}
 
-  defp check_min_drones(:diamond, [_, _, _, _ | _]), do: :ok
-  defp check_min_drones(:diamond, _), do: {:error, :too_few_drones}
-  defp check_min_drones(:vee, [_, _, _ | _]), do: :ok
-  defp check_min_drones(:vee, _), do: {:error, :too_few_drones}
-  defp check_min_drones(:circle, [_, _, _ | _]), do: :ok
-  defp check_min_drones(:circle, _), do: {:error, :too_few_drones}
-  defp check_min_drones(:front, [_, _ | _]), do: :ok
-  defp check_min_drones(:front, _), do: {:error, :too_few_drones}
-  defp check_min_drones(:column, [_, _ | _]), do: :ok
-  defp check_min_drones(:column, _), do: {:error, :too_few_drones}
-  defp check_min_drones(:echelon, [_, _ | _]), do: :ok
-  defp check_min_drones(:echelon, _), do: {:error, :too_few_drones}
-  defp check_min_drones(:grid, [_, _ | _]), do: :ok
-  defp check_min_drones(:grid, _), do: {:error, :too_few_drones}
-  defp check_min_drones(_formation, _drones), do: :ok
+  defp check_duplicates(drones) do
+    if length(Enum.uniq(drones)) == length(drones) do
+      :ok
+    else
+      {:error, :duplicate_drones}
+    end
+  end
+
+  defp check_drone_count(formation, drones) do
+    n = length(drones)
+
+    case Map.fetch(@min_drones, formation) do
+      {:ok, min} ->
+        max = Map.get(@max_drones, formation)
+
+        cond do
+          n < min -> {:error, :too_few_drones}
+          max != nil and n > max -> {:error, :too_many_drones}
+          true -> :ok
+        end
+
+      :error ->
+        :ok
+    end
+  end
+
+  defp validate_opts(formation, opts) do
+    heading = Map.get(opts, :heading_deg, 0)
+    spacing = Map.get(opts, :spacing_cm, 100)
+    min_sep = Map.get(opts, :min_separation_cm, 80)
+    side = Map.get(opts, :side, :right)
+    radius = Map.get(opts, :radius_cm, spacing)
+    columns = Map.get(opts, :columns, :auto)
+
+    with :ok <- require_integer(heading),
+         :ok <- require_positive_integer(spacing),
+         :ok <- require_positive_integer(min_sep),
+         :ok <- validate_side(formation, side),
+         :ok <- validate_radius(formation, radius),
+         :ok <- validate_columns(formation, columns) do
+      {:ok,
+       opts
+       |> Map.put(:heading_deg, heading)
+       |> Map.put(:spacing_cm, spacing)
+       |> Map.put(:min_separation_cm, min_sep)
+       |> Map.put(:side, side)
+       |> Map.put(:radius_cm, radius)
+       |> Map.put(:columns, columns)}
+    end
+  end
+
+  defp require_integer(n) when is_integer(n), do: :ok
+  defp require_integer(_), do: {:error, :invalid_option}
+
+  defp require_positive_integer(n) when is_integer(n) and n > 0, do: :ok
+  defp require_positive_integer(_), do: {:error, :invalid_option}
+
+  defp validate_side(:echelon, side) when side in [:left, :right], do: :ok
+  defp validate_side(:echelon, _), do: {:error, :invalid_option}
+  defp validate_side(_, _), do: :ok
+
+  defp validate_radius(:circle, radius), do: require_positive_integer(radius)
+  defp validate_radius(_, _), do: :ok
+
+  defp validate_columns(:grid, :auto), do: :ok
+  defp validate_columns(:grid, columns), do: require_positive_integer(columns)
+  defp validate_columns(_, _), do: :ok
 
   defp fetch_positions(drones, opts) do
     positions = Map.get(opts, :positions, %{})
 
-    missing =
-      Enum.reject(drones, fn name ->
-        match?(%{x: _, y: _}, Map.get(positions, name))
-      end)
+    if Enum.all?(drones, fn name -> match?(%{x: _, y: _}, Map.get(positions, name)) end) do
+      normalized =
+        Map.new(drones, fn name ->
+          pos = Map.fetch!(positions, name)
 
-    if missing == [] do
-      {:ok, positions}
+          {name,
+           %{
+             x: round_number(Map.fetch!(pos, :x)),
+             y: round_number(Map.fetch!(pos, :y)),
+             z: round_number(Map.get(pos, :z, 0)),
+             yaw: rem(round_number(Map.get(pos, :yaw, 0)) + 360, 360)
+           }}
+        end)
+
+      {:ok, normalized}
     else
       {:error, :missing_positions}
     end
   end
 
+  defp round_number(n) when is_integer(n), do: n
+  defp round_number(n) when is_float(n), do: round(n)
+
   defp resolve_origin(_drones, positions, %{leader: leader}) do
     case Map.get(positions, leader) do
-      %{x: x, y: y} -> {:ok, {x, y}}
+      %{x: x, y: y} -> {:ok, {x * 1.0, y * 1.0}}
       _ -> {:error, :leader_unavailable}
     end
   end
 
-  defp resolve_origin(_drones, _positions, %{origin: {:xy, x, y}}), do: {:ok, {x, y}}
+  defp resolve_origin(_drones, _positions, %{origin: {:xy, x, y}}), do: {:ok, {x * 1.0, y * 1.0}}
 
   defp resolve_origin(drones, positions, _opts) do
     {sx, sy} =
@@ -298,6 +390,19 @@ defmodule Drone.Formation do
     {:ok, {sx / n, sy / n}}
   end
 
+  defp build_missions(drones, positions, slots) do
+    Enum.reduce_while(drones, {:ok, %{}}, fn name, {:ok, acc} ->
+      case Map.fetch(slots, name) do
+        {:ok, {tx, ty}} ->
+          pos = Map.fetch!(positions, name)
+          {:cont, {:ok, Map.put(acc, name, path_mission(pos, tx, ty))}}
+
+        :error ->
+          {:halt, {:error, :unassigned_slot}}
+      end
+    end)
+  end
+
   defp compute_slots(:front, drones, origin, heading, spacing, _opts) do
     {:ok, line_slots(drones, origin, heading, spacing, :perpendicular)}
   end
@@ -307,8 +412,7 @@ defmodule Drone.Formation do
   end
 
   defp compute_slots(:echelon, drones, origin, heading, spacing, opts) do
-    side = Map.get(opts, :side, :right)
-    sign = if side == :left, do: -1, else: 1
+    sign = if Map.fetch!(opts, :side) == :left, do: -1, else: 1
     {fx, fy} = unit(heading)
     {rx, ry} = perpendicular(heading)
     n = length(drones)
@@ -348,11 +452,10 @@ defmodule Drone.Formation do
     {:ok, Map.new([{leader, tip} | wing_slots])}
   end
 
-  defp compute_slots(:diamond, drones, origin, heading, spacing, _opts) do
+  defp compute_slots(:diamond, [a, b, c, d], origin, heading, spacing, _opts) do
     {fx, fy} = unit(heading)
     {rx, ry} = perpendicular(heading)
     {ox, oy} = origin
-    [a, b, c, d | _] = drones
 
     slots = %{
       a => {trunc(ox + spacing * fx), trunc(oy + spacing * fy)},
@@ -385,7 +488,13 @@ defmodule Drone.Formation do
 
   defp compute_slots(:grid, drones, origin, heading, spacing, opts) do
     n = length(drones)
-    cols = Map.get(opts, :columns, max(1, ceil(:math.sqrt(n))))
+
+    cols =
+      case Map.get(opts, :columns, :auto) do
+        :auto -> max(1, ceil(:math.sqrt(n)))
+        c -> c
+      end
+
     {fx, fy} = unit(heading)
     {rx, ry} = perpendicular(heading)
     {ox, oy} = origin
@@ -478,25 +587,31 @@ defmodule Drone.Formation do
         mission
 
       delta <= 180 ->
-        Mission.rotate(mission, :cw, max(delta, 1))
+        Mission.rotate(mission, :cw, delta)
 
       true ->
-        Mission.rotate(mission, :ccw, max(360 - delta, 1))
+        Mission.rotate(mission, :ccw, 360 - delta)
     end
   end
 
   defp append_forward_segments(mission, distance) when distance <= @max_move_cm do
-    if distance >= @min_move_cm do
-      Mission.move(mission, :forward, distance)
-    else
-      mission
-    end
+    Mission.move(mission, :forward, distance)
   end
 
   defp append_forward_segments(mission, distance) do
+    # Keep every segment >= @min_move_cm so the target is reached exactly.
+    remainder = distance - @max_move_cm
+
+    {first, rest} =
+      if remainder < @min_move_cm do
+        {@max_move_cm - (@min_move_cm - remainder), @min_move_cm}
+      else
+        {@max_move_cm, remainder}
+      end
+
     mission
-    |> Mission.move(:forward, @max_move_cm)
-    |> append_forward_segments(distance - @max_move_cm)
+    |> Mission.move(:forward, first)
+    |> append_forward_segments(rest)
   end
 
   defp bearing_deg(dx, dy) do

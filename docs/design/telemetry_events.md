@@ -177,6 +177,86 @@ Emitted when an emergency stop is triggered.
 
 This event is emitted regardless of the outcome of the emergency command. It signals intent.
 
+### Swarm Events
+
+#### `[:drone, :swarm, :start]`
+
+Emitted when a swarm coordinator finishes connecting its members.
+
+```elixir
+:telemetry.execute(
+  [:drone, :swarm, :start],
+  %{timestamp: System.monotonic_time()},
+  %{swarm: atom() | nil, members: [atom()]}
+)
+```
+
+#### `[:drone, :swarm, :stop]`
+
+Emitted when a swarm coordinator terminates (normal stop, shutdown, or crash
+with trapped exits).
+
+```elixir
+:telemetry.execute(
+  [:drone, :swarm, :stop],
+  %{timestamp: System.monotonic_time()},
+  %{swarm: atom() | nil, members: [atom()], reason: term()}
+)
+```
+
+#### `[:drone, :swarm, :command, :start]`
+
+Emitted before a coordinated op (`:connect_sdk`, `:takeoff`, `:land`, `:run`).
+
+```elixir
+:telemetry.execute(
+  [:drone, :swarm, :command, :start],
+  %{command: atom(), timestamp: System.monotonic_time()},
+  %{swarm: atom() | nil, members: [atom()]}
+)
+```
+
+#### `[:drone, :swarm, :command, :stop]`
+
+Emitted after a successful coordinated op.
+
+```elixir
+:telemetry.execute(
+  [:drone, :swarm, :command, :stop],
+  %{command: atom(), duration: non_neg_integer(), timestamp: System.monotonic_time()},
+  %{swarm: atom() | nil, members: [atom()]}
+)
+```
+
+#### `[:drone, :swarm, :command, :error]`
+
+Emitted on partial failure or plan-time error during a coordinated op.
+
+```elixir
+:telemetry.execute(
+  [:drone, :swarm, :command, :error],
+  %{
+    command: atom(),
+    reason: term(),
+    duration: non_neg_integer(),
+    timestamp: System.monotonic_time()
+  },
+  %{swarm: atom() | nil, members: [atom()]}
+)
+```
+
+#### `[:drone, :swarm, :emergency]`
+
+Emitted when `Drone.Swarm.emergency/1` fans out (from the caller process).
+
+```elixir
+:telemetry.execute(
+  [:drone, :swarm, :emergency],
+  %{timestamp: System.monotonic_time()},
+  %{swarm: atom() | nil, members: [atom()]}
+)
+```
+
 ## Telemetry Module
 
 The `Drone.Telemetry` module provides helper functions for emitting events:

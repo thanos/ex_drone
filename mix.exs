@@ -18,6 +18,7 @@ defmodule Drone.MixProject do
           "docs/tello.md",
           "docs/swarm.md",
           "docs/formations.md",
+          "docs/design/v0_2_0_deferred.md",
           "docs/architecture.md",
           "docs/adapter_authoring.md"
         ],

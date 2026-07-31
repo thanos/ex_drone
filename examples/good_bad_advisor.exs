@@ -10,7 +10,7 @@ bad = :bad_advisor
 IO.puts("Starting swarm with :good and :bad advisors (simulator)...")
 
 {:ok, swarm} =
-  Drone.Swarm.start_link(
+  Drone.Swarm.start(
     name: :advisors,
     members: [
       {good, adapter: :sim, initial_x: 0, initial_y: 0},
