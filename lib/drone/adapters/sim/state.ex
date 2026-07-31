@@ -3,7 +3,7 @@ defmodule Drone.Adapters.Sim.State do
   In-process simulator state for `Drone.Adapters.Sim`.
 
   Tracks pose, battery, mode, and command history without network I/O.
-  Created via `new/1` from `Drone.Adapters.Sim.connect/1`.
+  Created via `new/1` from the simulator adapter's `connect/1` callback.
   """
 
   @typedoc """

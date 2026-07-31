@@ -136,7 +136,7 @@ Must be explicit, tested, and documented before enabling.
 |---------|--------|--------|
 | Sequential fan-out | Default | Keep for deterministic tests |
 | `:async` coordinated takeoff/land/run | No | Opt-in with timeouts and ordered result maps |
-| `Drone.Mission.concurrent/2` | No | Run missions on many drones in parallel |
+| `Mission.concurrent/2` (planned) | No | Run missions on many drones in parallel |
 | Barrier sync (“all reached slot”) | No | Wait until all members report pose within epsilon |
 
 **Why deferred:** Concurrency complicates tests and partial-failure semantics.

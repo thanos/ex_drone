@@ -24,7 +24,7 @@ defmodule Drone.Formation do
   Default origin is the **centroid** of current positions, or a configured
   `{:xy, x, y}`. Optional `:leader` uses that member's pose **at plan time
   only** — not a live runtime dependency. Yaw `0` means +Y
-  (same convention as `Drone.Geometry`).
+  (same convention as the shared geometry helpers).
 
   ## Movement strategy
 

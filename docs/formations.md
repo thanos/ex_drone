@@ -35,7 +35,7 @@ Formation.plan(:front, %{
 })
 ```
 
-- **heading_deg** — direction of motion (yaw 0 is +Y, matching `Drone.Geometry`)
+- **heading_deg** — direction of motion (yaw 0 is +Y, matching shared geometry conventions)
 - **origin** — `:centroid` (default) or `{:xy, x, y}`
 - **leader** — optional; uses that member's pose as the plan-time origin only
 - **min_separation_cm** — plan-time Separate check; rejects too-tight slots

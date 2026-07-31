@@ -6,7 +6,7 @@ defmodule Drone.Swarm.Supervisor do
   swarm coordinators so a swarm crash does not restart vehicle children
   (and vice versa).
 
-  Started automatically by `Drone.Application` as `Drone.Swarm.Supervisor`.
+  Started automatically by the application supervisor as `Drone.Swarm.Supervisor`.
 
   ## Example
 
@@ -35,7 +35,7 @@ defmodule Drone.Swarm.Supervisor do
 
   ## Example
 
-      # Called from Drone.Application children:
+      # Child of the OTP application:
       # {Drone.Swarm.Supervisor, []}
   """
   @spec start_link(keyword()) :: GenServer.on_start()
