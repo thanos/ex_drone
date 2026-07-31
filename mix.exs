@@ -4,7 +4,7 @@ defmodule Drone.MixProject do
   def project do
     [
       app: :ex_drone,
-      version: "0.1.0",
+      version: "0.2.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -16,6 +16,8 @@ defmodule Drone.MixProject do
           "docs/safety.md",
           "docs/simulator.md",
           "docs/tello.md",
+          "docs/swarm.md",
+          "docs/formations.md",
           "docs/architecture.md",
           "docs/adapter_authoring.md"
         ],
@@ -26,17 +28,22 @@ defmodule Drone.MixProject do
         tool: ExCoveralls,
         ignore_modules: [FakeTelloServer]
       ],
-      preferred_cli_env: [
+      source_url: "https://github.com/thanos/ex_drone",
+      package: package(),
+      description: "BEAM-native drone control for Elixir and Erlang."
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
         coveralls: :test,
         "coveralls.detail": :test,
         "coveralls.post": :test,
         "coveralls.html": :test,
         "coveralls.json": :test,
         sobelow: :dev
-      ],
-      source_url: "https://github.com/thanos/ex_drone",
-      package: package(),
-      description: "BEAM-native drone control for Elixir and Erlang."
+      ]
     ]
   end
 

@@ -7,7 +7,9 @@ defmodule Drone.Application do
   def start(_type, _args) do
     children = [
       {Registry, keys: :unique, name: Drone.Vehicle.Registry},
-      Drone.Supervisor
+      {Registry, keys: :unique, name: Drone.Swarm.Registry},
+      Drone.Supervisor,
+      Drone.Swarm.Supervisor
     ]
 
     opts = [strategy: :one_for_one, name: Drone.Supervisor.Root]

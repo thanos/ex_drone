@@ -23,6 +23,37 @@ defmodule Drone.Safety.Policy do
       {:ok, drone} = Drone.connect(:sim, name: :test, safety: policy)
   """
 
+  @typedoc """
+  Safety limits applied by `Drone.Safety.check/3`.
+
+  ## Fields
+
+  | Field | Type | Default | Meaning |
+  |-------|------|---------|---------|
+  | `max_altitude_cm` | `pos_integer() \\| nil` | preset | Reject climbs above this height |
+  | `max_distance_cm` | `pos_integer() \\| nil` | preset | Max horizontal distance from origin |
+  | `min_battery_percent` | `non_neg_integer()` | `15` | Block takeoff below this % |
+  | `battery_warning_percent` | `non_neg_integer()` | `20` | Emit warning at/under this % |
+  | `allowlist` | `[atom()] \\| nil` | `nil` | If set, only these command types |
+  | `dry_run` | `boolean()` | `false` | Validate but do not send to adapter |
+  | `indoor` | `boolean()` | `false` | Marker / indoor preset flag |
+  | `prop_guards` | `boolean()` | `false` | Prop guards installed (flip warning) |
+  | `geofence` | `Drone.Safety.Geofence.t() \\| nil` | `nil` | Optional area restriction |
+
+  ## Example
+
+      %Drone.Safety.Policy{
+        max_altitude_cm: 200,
+        max_distance_cm: 500,
+        min_battery_percent: 20,
+        battery_warning_percent: 30,
+        allowlist: nil,
+        dry_run: false,
+        indoor: true,
+        prop_guards: true,
+        geofence: nil
+      }
+  """
   @type t :: %__MODULE__{
           max_altitude_cm: pos_integer() | nil,
           max_distance_cm: pos_integer() | nil,

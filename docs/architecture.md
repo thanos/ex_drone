@@ -7,6 +7,12 @@ ex_drone is a BEAM-native drone control library built on OTP principles.
 ```
 Drone (Public API)
   |
+  +-- Drone.Swarm (GenServer coordinator)
+  |     |
+  |     +-- Drone.Formation (pure planners)
+  |     +-- Drone.Mission (per-drone scripts)
+  |     +-- Drone public API (fan-out to members)
+  |
   +-- Drone.Vehicle (GenServer, one per drone)
   |     |
   |     +-- Drone.Safety (pure validation)
@@ -30,11 +36,15 @@ Drone (Public API)
 Drone.Supervisor.Root (Supervisor)
   |
   +-- Drone.Vehicle.Registry (Registry)
+  +-- Drone.Swarm.Registry (Registry)
   +-- Drone.Supervisor (DynamicSupervisor)
+  |     |
+  |     +-- Drone.Vehicle :good
+  |     +-- Drone.Vehicle :bad
+  |     +-- ...
+  +-- Drone.Swarm.Supervisor (DynamicSupervisor)
         |
-        +-- Drone.Vehicle :sim_1
-        +-- Drone.Vehicle :tello_1
-        +-- ...
+        +-- Drone.Swarm :advisors
 ```
 
 Each `Drone.Vehicle` is a supervised GenServer that:

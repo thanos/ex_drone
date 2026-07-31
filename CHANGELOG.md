@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.2.0 (2026-07-31)
+
+### Added
+
+- `Drone.Swarm` coordinator for named multi-drone groups with fail-fast fan-out
+- `Drone.Swarm.Supervisor` and `Drone.Swarm.Registry` for supervised, named swarms
+- `Drone.Formation` pure planners: `:front`, `:column`, `:vee`, `:diamond`,
+  `:echelon`, `:circle`, `:shoulder_pair`, optional `:grid`
+- Coordinated `connect_sdk/1`, `takeoff/1`, `land/1`, `emergency/1`, `run/2`,
+  `telemetry/1`, and `stop/1`
+- `Swarm.run/2` supports formation atoms, `%{name => Mission.t()}`, or a custom function
+- Plan-time separation checks (`min_separation_cm`) for formations
+- Simulator initial pose opts: `initial_x`, `initial_y`, `initial_z`, `initial_yaw`
+- Swarm telemetry events (`[:drone, :swarm, ...]`)
+- Good Advisor / Bad Advisor example (`examples/good_bad_advisor.exs`)
+- Docs: `docs/swarm.md`, `docs/formations.md`, plus design deferred catalogue
+
+### Notes
+
+- Formations are one-shot geometric planners (simulator-first), not closed-loop
+  flocking. Deferred behaviours are listed in `docs/design/v0_2_0_deferred.md`.
+
 ## v0.1.0 (2026-06-10)
 
 ### Added

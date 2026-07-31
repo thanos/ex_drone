@@ -19,6 +19,21 @@ defmodule Drone.Adapters.SimTest do
       assert {:ok, %State{} = state} = Sim.connect(failure_rate: 1.0)
       assert state.config.failure_rate == 1.0
     end
+
+    test "connects with initial world pose" do
+      assert {:ok, %State{} = state} =
+               Sim.connect(initial_x: -50, initial_y: 20, initial_z: 0, initial_yaw: 90)
+
+      assert state.x == -50
+      assert state.y == 20
+      assert state.z == 0
+      assert state.yaw == 90
+
+      {:ok, telemetry, _} = Sim.telemetry(state)
+      assert telemetry.x == -50
+      assert telemetry.y == 20
+      assert telemetry.yaw == 90
+    end
   end
 
   describe "battery reporting" do
