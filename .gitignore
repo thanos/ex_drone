@@ -12,4 +12,5 @@ erl_crash.dump
 /priv/plts/*.plt.hash
 coveralls.json
 *.tar
-prompts/
+/baoulo/
+.DS_Store

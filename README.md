@@ -25,7 +25,7 @@ Add `ex_drone` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ex_drone, "~> 0.1.0"}
+    {:ex_drone, "~> 0.2.0"}
   ]
 end
 ```
@@ -49,6 +49,26 @@ Drone.land(drone)
 # Disconnect
 Drone.disconnect(drone)
 ```
+
+## Swarms
+
+Coordinate multiple simulated drones with `Drone.Swarm`:
+
+```elixir
+{:ok, swarm} =
+  Drone.Swarm.start([
+    {:good, adapter: :sim, initial_x: -50},
+    {:bad, adapter: :sim, initial_x: 50}
+  ])
+
+Drone.Swarm.connect_sdk(swarm)
+{:ok, _} = Drone.Swarm.takeoff(swarm)
+{:ok, _} = Drone.Swarm.run(swarm, :front)
+{:ok, _} = Drone.Swarm.land(swarm)
+:ok = Drone.Swarm.stop(swarm)
+```
+
+See `docs/swarm.md`, `docs/formations.md`, and `examples/good_bad_advisor.exs`.
 
 ## Safety Policies
 
@@ -130,9 +150,22 @@ Public API, supervised processes, safety pipeline, simulator, Tello adapter, mis
 - [x] Dry-run mode for validating missions without flying
 - [x] Flight time simulation (`query(:time)` returns cumulative motor-on seconds)
 - [x] CI/CD — lint, test matrix (1.17-1.20 / OTP 26-29), coverage (90.2%), sobelow, dialyzer, docs, Hex.pm publish
-- [x] 253 tests, 90.2% coverage, credo --strict clean, --warnings-as-errors clean
+- [x] 276+ tests, credo --strict clean, --warnings-as-errors clean
 
-### v0.2.0 — Adapters & Resilience
+### v0.2.0 — Swarms and Mission Orchestration
+
+Multi-drone coordination on the v0.1.0 vehicle model.
+
+- [x] `Drone.Swarm` — supervised group of drones with fail-fast fan-out
+- [x] Named swarm registry (`Drone.Swarm.Registry`)
+- [x] Coordinated takeoff / land / emergency
+- [x] Formation planners — front, column, vee, diamond, echelon, circle
+- [x] `Swarm.run/2` — formations, per-drone missions, or custom functions
+- [x] Simulator initial world offsets for multi-drone layouts
+- [x] Good Advisor / Bad Advisor example
+- [x] Deferred flocking / closed-loop catalogue (`docs/design/v0_2_0_deferred.md`)
+
+### v0.3.0 — Adapters & Resilience
 
 New hardware adapters, command retry, async missions, and reconnect.
 
@@ -145,16 +178,6 @@ New hardware adapters, command retry, async missions, and reconnect.
 - [ ] Reconnect on adapter failure — Vehicle auto-reconnects after network errors
 - [ ] `Drone.Adapters.Tello` — state recovery on reconnect (re-query SDK mode, battery, position)
 - [ ] Configurable command timeout per-vehicle (default 10s)
-
-### v0.3.0 — Multi-Drone Coordination
-
-Swarm primitives for coordinating multiple drones.
-
-- [ ] `Drone.Swarm` — supervised group of drones with shared mission context
-- [ ] Formation flying — grid, line, circle — via relative position commands
-- [ ] `Drone.Mission.concurrent/2` — run missions on multiple drones in parallel
-- [ ] Collision avoidance in simulator — safety policy rejects commands that would collide
-- [ ] Coordinated takeoff/land — swarm-level commands that dispatch to individual drones
 
 ### v0.4.0 — Video & Sensors
 
@@ -174,6 +197,7 @@ Flight logging, replay, and observability.
 - [ ] Mission replay — replay a recorded mission against a simulator for regression testing
 - [ ] `:telemetry` analytics dashboard — LiveDashboard plugin with real-time charts
 - [ ] Flight log query API — filter by drone, date, safety rejections, battery level
+- [ ] Live flocking / neighbor-aware collision avoidance (see deferred swarm catalogue)
 
 ### v1.0.0 — Stable API
 

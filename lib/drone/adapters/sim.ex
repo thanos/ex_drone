@@ -34,6 +34,18 @@ defmodule Drone.Adapters.Sim do
   with 50% battery.
 
       {:ok, drone} = Drone.connect(:sim, name: :test, battery: 30)
+
+  ## Initial Pose
+
+  For multi-drone simulation, set a shared world frame offset:
+
+      {:ok, drone} = Drone.connect(:sim,
+        name: :left,
+        initial_x: -50,
+        initial_y: 0,
+        initial_z: 0,
+        initial_yaw: 0
+      )
   """
 
   @behaviour Drone.Adapter
@@ -50,16 +62,26 @@ defmodule Drone.Adapters.Sim do
         :battery_drain_per_land,
         :battery_drain_per_query,
         :failure_rate,
-        :fail_commands
+        :fail_commands,
+        :initial_x,
+        :initial_y,
+        :initial_z,
+        :initial_yaw
       ])
 
     {:ok, State.new(sim_opts)}
   end
 
   @impl Drone.Adapter
-  def command(%State{} = state, %Command{type: :emergency}) do
-    new_state = %{state | mode: :emergency, flying: false}
-    {:ok, :ok, State.push_command(new_state, Command.emergency())}
+  def command(%State{} = state, %Command{type: :emergency} = cmd) do
+    case check_failure(state, cmd) do
+      :ok ->
+        new_state = %{state | mode: :emergency, flying: false}
+        {:ok, :ok, State.push_command(new_state, Command.emergency())}
+
+      {:error, reason} ->
+        {:error, reason, state}
+    end
   end
 
   def command(%State{} = state, %Command{} = cmd) do

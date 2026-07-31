@@ -41,6 +41,20 @@ Start with a specific battery level:
 {:ok, drone} = Drone.connect(:sim, name: :low_bat, battery: 30)
 ```
 
+## Initial Pose (multi-drone)
+
+Assign a shared world-frame offset so swarm formations share coordinates:
+
+```elixir
+{:ok, left} =
+  Drone.connect(:sim, name: :left, initial_x: -50, initial_y: 0, initial_yaw: 0)
+
+{:ok, right} =
+  Drone.connect(:sim, name: :right, initial_x: 50, initial_y: 0, initial_yaw: 0)
+```
+
+Options: `initial_x`, `initial_y`, `initial_z`, `initial_yaw` (degrees).
+
 Battery is always reported as an integer (truncated from fractional drain):
 ```elixir
 {:ok, battery} = Drone.query(drone, :battery)
