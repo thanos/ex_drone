@@ -1,4 +1,6 @@
 Mox.defmock(Drone.AdapterMock, for: Drone.Adapter)
+Mox.defmock(Drone.CrazyflieUSBMock, for: Drone.Adapters.Crazyflie.USB)
+Mox.defmock(Drone.CrazyflieTransportMock, for: Drone.Adapters.Crazyflie.Transport)
 
 ExUnit.start(exclude: [:pending], max_cases: 1)
 

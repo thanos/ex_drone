@@ -13,7 +13,7 @@ Add `ex_drone` to your dependencies:
 ```elixir
 def deps do
   [
-    {:ex_drone, "~> 0.2.0"}
+    {:ex_drone, "~> 0.3.0"}
   ]
 end
 ```

@@ -8,6 +8,19 @@ defmodule Drone.Vehicle do
 
   Drivers should not call `Drone.Vehicle` directly. Use the `Drone`
   public API module instead.
+
+  ## Examples
+
+      # Prefer the public API:
+      {:ok, drone} = Drone.connect(:sim, name: :alpha)
+
+      # Low-level (tests / supervision trees):
+      {:ok, pid} =
+        Drone.Vehicle.start_link(
+          name: :alpha,
+          adapter: :sim,
+          safety: [max_altitude_cm: 200]
+        )
   """
 
   use GenServer
@@ -23,10 +36,37 @@ defmodule Drone.Vehicle do
     speed: 0,
     flying: false,
     mode: :idle,
+    estimator_ready: true,
+    telemetry_at: nil,
     last_command: nil,
     command_history: []
   }
 
+  @typedoc """
+  Internal GenServer state for one vehicle process.
+
+  | Field | Type | Meaning |
+  | --- | --- | --- |
+  | `:name` | `atom()` | Registry name for this vehicle |
+  | `:adapter_module` | `module()` | Resolved `Drone.Adapter` implementation |
+  | `:adapter_state` | `term()` | Opaque adapter state |
+  | `:safety_policy` | `Drone.Safety.Policy.t()` | Active safety policy |
+  | `:vehicle_state` | `map()` | Kinematics + mode used by safety / telemetry |
+
+  `:vehicle_state` keys include `:x`, `:y`, `:z`, `:yaw` (cm / degrees),
+  `:battery`, `:speed`, `:flying`, `:mode` (`:idle` \\| `:sdk_mode` \\|
+  `:flying` \\| `:emergency`), `:estimator_ready`, `:telemetry_at`,
+  `:last_command`, and `:command_history`.
+
+  ## Example
+
+      %Drone.Vehicle{
+        name: :alpha,
+        adapter_module: Drone.Adapters.Sim,
+        safety_policy: %Drone.Safety.Policy{max_altitude_cm: 300},
+        vehicle_state: %{x: 0, y: 0, z: 50, mode: :flying, flying: true, battery: 98}
+      }
+  """
   @type state :: %{
           name: atom(),
           adapter_module: module(),
@@ -54,6 +94,20 @@ defmodule Drone.Vehicle do
     vehicle_state: @default_vehicle_state
   ]
 
+  @doc """
+  Child specification for starting under a supervisor.
+
+  Restart strategy is `:temporary` so a crashed vehicle is not restarted
+  automatically by a static supervisor (callers reconnect explicitly).
+
+  ## Parameters
+
+    * `opts` (`keyword()`) — same options as `start_link/1`
+
+  ## Returns
+
+  A child specification map suitable for supervisors.
+  """
   def child_spec(opts) do
     %{
       id: __MODULE__,
@@ -62,17 +116,75 @@ defmodule Drone.Vehicle do
     }
   end
 
+  @doc """
+  Starts a vehicle GenServer registered under `opts[:name]`.
+
+  ## Parameters
+
+    * `opts` (`keyword()`) — required:
+      * `:name` (`atom()`) — unique vehicle name in `Drone.Vehicle.Registry`
+      * `:adapter` (`atom()` \\| `module()`) — `:sim`, `:tello`, `:crazyflie`, or a module
+      Optional:
+      * `:safety` (`keyword()`) — passed to `Drone.Safety.Policy.new/1`
+      * remaining keys — forwarded to `adapter.connect/1`
+
+  ## Returns
+
+  `GenServer.on_start()` (`{:ok, pid}` \\| `{:error, reason}`).
+
+  ## Examples
+
+      {:ok, _pid} =
+        Drone.Vehicle.start_link(
+          name: :cf_1,
+          adapter: :crazyflie,
+          uri: "mock://ready"
+        )
+  """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
     name = Keyword.fetch!(opts, :name)
     GenServer.start_link(__MODULE__, opts, name: via_tuple(name))
   end
 
+  @doc """
+  Builds a `:via` tuple for the vehicle registry.
+
+  ## Parameters
+
+    * `name` (`atom()`) — vehicle name
+
+  ## Returns
+
+  `{:via, Registry, {Drone.Vehicle.Registry, name}}`.
+
+  ## Examples
+
+      {:via, Registry, {Drone.Vehicle.Registry, :alpha}} =
+        Drone.Vehicle.via_tuple(:alpha)
+  """
   @spec via_tuple(atom()) :: {:via, Registry, {Drone.Vehicle.Registry, atom()}}
   def via_tuple(name) do
     {:via, Registry, {Drone.Vehicle.Registry, name}}
   end
 
+  @doc """
+  Looks up a running vehicle pid by name.
+
+  ## Parameters
+
+    * `name` (`atom()`) — vehicle name registered at `start_link/1`
+
+  ## Returns
+
+    * `pid()` — when registered
+    * `nil` — when no process is registered under that name
+
+  ## Examples
+
+      pid = Drone.Vehicle.whereis(:alpha)
+      true = is_pid(pid) or is_nil(pid)
+  """
   @spec whereis(atom()) :: pid() | nil
   def whereis(name) do
     case Registry.lookup(Drone.Vehicle.Registry, name) do
@@ -182,6 +294,11 @@ defmodule Drone.Vehicle do
     {:reply, state.safety_policy, state}
   end
 
+  def handle_call(:capabilities, _from, %__MODULE__{} = state) do
+    caps = Adapter.capabilities(state.adapter_module, state.adapter_state)
+    {:reply, caps, state}
+  end
+
   defp execute_command(%Command{} = cmd, %__MODULE__{} = state, _warnings) do
     adapter_key = adapter_key_from_module(state.adapter_module)
 
@@ -201,7 +318,10 @@ defmodule Drone.Vehicle do
           duration = System.monotonic_time() - start_time
           Telemetry.emit_command_stop(adapter_key, state.name, cmd.type, :ok, duration)
 
-          new_vehicle_state = update_vehicle_state(state.vehicle_state, cmd, reply)
+          new_vehicle_state =
+            state.vehicle_state
+            |> update_vehicle_state(cmd, reply)
+            |> maybe_sync_adapter_pose(state.adapter_module, new_adapter_state)
 
           new_state = %{
             state
@@ -261,6 +381,8 @@ defmodule Drone.Vehicle do
           speed: Map.get(telemetry, :speed, 0),
           flying: Map.get(telemetry, :flying, false),
           mode: Map.get(telemetry, :mode, :idle),
+          estimator_ready: Map.get(telemetry, :estimator_ready, true),
+          telemetry_at: Map.get(telemetry, :telemetry_at),
           last_command: nil,
           command_history: []
         }
@@ -350,7 +472,31 @@ defmodule Drone.Vehicle do
     %{vehicle_state | last_command: cmd, command_history: [cmd | vehicle_state.command_history]}
   end
 
+  defp maybe_sync_adapter_pose(vehicle_state, adapter_module, adapter_state) do
+    caps = Adapter.capabilities(adapter_module, adapter_state)
+
+    if Map.get(caps, :requires_estimator, false) do
+      case adapter_module.telemetry(adapter_state) do
+        {:ok, telem, _} ->
+          vehicle_state
+          |> Map.put(:x, Map.get(telem, :x, vehicle_state.x))
+          |> Map.put(:y, Map.get(telem, :y, vehicle_state.y))
+          |> Map.put(:z, Map.get(telem, :z, vehicle_state.z))
+          |> Map.put(:yaw, Map.get(telem, :yaw, vehicle_state.yaw))
+          |> Map.put(:battery, Map.get(telem, :battery, vehicle_state.battery))
+          |> Map.put(:estimator_ready, Map.get(telem, :estimator_ready, true))
+          |> Map.put(:telemetry_at, Map.get(telem, :telemetry_at))
+
+        _ ->
+          vehicle_state
+      end
+    else
+      vehicle_state
+    end
+  end
+
   defp adapter_key_from_module(Drone.Adapters.Sim), do: :sim
   defp adapter_key_from_module(Drone.Adapters.Tello), do: :tello
+  defp adapter_key_from_module(Drone.Adapters.Crazyflie), do: :crazyflie
   defp adapter_key_from_module(mod), do: mod
 end

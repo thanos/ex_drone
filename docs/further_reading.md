@@ -15,6 +15,7 @@ background and next steps.
 | [Safety](safety.md) | Policies, geofencing, allowlists, emergency |
 | [Simulator](simulator.md) | In-process adapter, battery, failure injection, initial pose |
 | [Tello](tello.md) | DJI Tello / Tello EDU UDP adapter |
+| [Crazyflie](crazyflie.md) | Crazyflie 2.x via Crazyradio / mock transport |
 | [Swarms](swarm.md) | `Drone.Swarm` membership, fan-out, fail-fast |
 | [Formations](formations.md) | Geometric formation catalog and planners |
 | [Architecture](architecture.md) | Modules, supervision tree, design rationale |
@@ -41,19 +42,21 @@ background and next steps.
 
 ## Platforms and adapters
 
-ex_drone talks to vehicles through the `Drone.Adapter` behaviour. v0.2.0
-ships an in-process simulator and a DJI Tello UDP adapter. Later milestones
-target Crazyflie and MAVLink-class platforms.
+ex_drone talks to vehicles through the `Drone.Adapter` behaviour. v0.3.0
+ships an in-process simulator, a DJI Tello UDP adapter, and a Crazyflie
+adapter (Crazyradio with pluggable USB backend, plus `mock://` for CI).
 
 - [DJI Tello SDK 2.0 User Guide (PDF)](https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf) - official command and response reference for Tello / Tello EDU
 - [Ryze Tello product page](https://www.ryzerobotics.com/tello) - hardware overview and EDU variants
-- [Bitcraze Crazyflie documentation](https://www.bitcraze.io/documentation/) - lightweight research quadrotor platform (planned adapter)
+- [Bitcraze Crazyflie documentation](https://www.bitcraze.io/documentation/) - research quadrotor platform
+- [CRTP specification](https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/functional-areas/crtp/) - Crazyflie packet protocol
+- [Crazyradio USB protocol](https://www.bitcraze.io/documentation/repository/crazyradio-firmware/master/functional-areas/usb_radio_protocol/) - radio dongle framing
 - [MAVLink protocol](https://mavlink.io/en/) - common message set used by many autopilots (planned adapter)
 - [ArduPilot documentation](https://ardupilot.org/) - autopilot stack often paired with MAVLink
 - [PX4 User Guide](https://docs.px4.io/) - autopilot stack often paired with MAVLink
 - [Nerves Project](https://nerves-project.org/) - Elixir on embedded devices (roadmap: on-drone or companion hosting)
 
-In-repo: [Tello guide](tello.md), [Adapter authoring](adapter_authoring.md),
+In-repo: [Tello guide](tello.md), [Crazyflie guide](crazyflie.md), [Adapter authoring](adapter_authoring.md),
 [Adapter contract](design/adapter_contract.md), [Tello SDK research](research/tello_sdk.md),
 [BEAM UDP research](research/beam_udp.md).
 

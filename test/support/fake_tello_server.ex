@@ -17,12 +17,21 @@ defmodule Drone.Adapters.Tello.FakeServer do
   ]
 
   def start_link(opts \\ []) do
-    port = Keyword.get(opts, :port, 19_876)
-    GenServer.start_link(__MODULE__, port, name: __MODULE__)
+    port = Keyword.fetch!(opts, :port)
+    GenServer.start_link(__MODULE__, port, Keyword.take(opts, [:name]))
+  end
+
+  def child_spec(opts) do
+    port = Keyword.fetch!(opts, :port)
+
+    %{
+      id: {__MODULE__, port},
+      start: {__MODULE__, :start_link, [opts]}
+    }
   end
 
   def init(port) do
-    {:ok, socket} = :gen_udp.open(port, [:inet, {:active, true}])
+    {:ok, socket} = :gen_udp.open(port, [:inet, {:active, true}, :binary])
     {:ok, %{socket: socket, state: :idle, port: port}}
   end
 
@@ -34,6 +43,11 @@ defmodule Drone.Adapters.Tello.FakeServer do
   def handle_info({:udp, _socket, ip, port, "takeoff"}, %{state: :sdk_mode} = state) do
     :gen_udp.send(state.socket, ip, port, "ok")
     {:noreply, %{state | state: :flying}}
+  end
+
+  def handle_info({:udp, _socket, ip, port, "takeoff"}, state) do
+    :gen_udp.send(state.socket, ip, port, "error")
+    {:noreply, state}
   end
 
   def handle_info({:udp, _socket, ip, port, "land"}, %{state: :flying} = state) do
@@ -66,7 +80,27 @@ defmodule Drone.Adapters.Tello.FakeServer do
     {:noreply, state}
   end
 
-  def handle_info({:udp, _socket, ip, port, command}, state) do
+  def handle_info({:udp, _socket, ip, port, "time?"}, state) do
+    :gen_udp.send(state.socket, ip, port, "12")
+    {:noreply, state}
+  end
+
+  def handle_info({:udp, _socket, ip, port, "wifi?"}, state) do
+    :gen_udp.send(state.socket, ip, port, "90")
+    {:noreply, state}
+  end
+
+  def handle_info({:udp, _socket, ip, port, "sdk?"}, state) do
+    :gen_udp.send(state.socket, ip, port, "20")
+    {:noreply, state}
+  end
+
+  def handle_info({:udp, _socket, ip, port, "sn?"}, state) do
+    :gen_udp.send(state.socket, ip, port, "0TQTESTSN")
+    {:noreply, state}
+  end
+
+  def handle_info({:udp, _socket, ip, port, command}, state) when is_binary(command) do
     if has_movement_prefix?(command) do
       :gen_udp.send(state.socket, ip, port, "ok")
       {:noreply, state}

@@ -13,7 +13,8 @@ BEAM-native drone control for Elixir and Erlang. Fly, monitor, and simulate prog
 
 - Do not fly near faces or people
 - Use prop guards at all times
-- Test in the simulator before connecting to real hardware
+- Test in the simulator (or Crazyflie `mock://`) before connecting to real hardware
+- Crazyflie high-level flight requires a working positioning system (Flow, Lighthouse, or Loco)
 - Use open indoor spaces or outdoor areas with clear lines of sight
 - Have an emergency stop ready at all times
 - Understand and follow local laws and regulations
@@ -25,7 +26,7 @@ Add `ex_drone` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ex_drone, "~> 0.2.0"}
+    {:ex_drone, "~> 0.3.0"}
   ]
 end
 ```
@@ -106,6 +107,26 @@ Drone.disconnect(drone)
 
 See the [Tello guide](docs/tello.md).
 
+## Crazyflie Connection
+
+```elixir
+{:ok, drone} =
+  Drone.connect(:crazyflie,
+    name: :cf_1,
+    uri: "mock://ready",
+    positioning: :flow
+  )
+
+Drone.connect_sdk(drone)
+Drone.takeoff(drone)
+Drone.move(drone, :forward, 50)
+Drone.land(drone)
+Drone.disconnect(drone)
+```
+
+Use `mock://` without hardware. Real Crazyradio links need a `usb_backend`
+implementing `Drone.Adapters.Crazyflie.USB`. See the [Crazyflie guide](docs/crazyflie.md).
+
 ## Mission Scripts
 
 ```elixir
@@ -141,6 +162,7 @@ See the [Architecture guide](docs/architecture.md).
 - [Safety](docs/safety.md)
 - [Simulator](docs/simulator.md)
 - [Tello](docs/tello.md)
+- [Crazyflie](docs/crazyflie.md)
 - [Swarms](docs/swarm.md)
 - [Formations](docs/formations.md)
 - [Architecture](docs/architecture.md)
@@ -218,12 +240,15 @@ Multi-drone coordination on the v0.1.0 vehicle model.
 
 ### v0.3.0 — Adapters & Resilience
 
-New hardware adapters, command retry, async missions, and reconnect.
+Crazyflie high-level flight, capability reporting, and shared adapter contracts.
 
-- [ ] `Drone.Adapters.Crazyflie` — Crazyflie BLE/USB adapter
+- [x] `Drone.Adapters.Crazyflie` — Crazyradio / mock high-level position flight
+- [x] Adapter capabilities — optional `capabilities/1` + `Drone.Adapter.Capabilities`
+- [x] Common adapter acceptance tests — shared Sim / Crazyflie contract checks
+- [x] Capability-aware mission validation before takeoff
+- [x] Estimator / stale-telemetry safety options
 - [ ] `Drone.Adapters.MAVLink` — MAVLink-compatible drones via serial/UDP
 - [ ] Adapter registry — `Drone.Adapter.register/2` for third-party adapters
-- [ ] Common adapter test suite — shared `Drone.Adapter.Acceptance` tests
 - [ ] Command retry with configurable backoff (`safe_to_retry?/1` already in `Drone.Command`)
 - [ ] `Mission.run_async/2` — fire-and-forget mission execution with progress events
 - [ ] Reconnect on adapter failure — Vehicle auto-reconnects after network errors

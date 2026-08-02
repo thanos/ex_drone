@@ -92,7 +92,7 @@ defmodule Drone do
   @doc """
   Connects to a drone and starts a supervised process.
 
-  Accepts an adapter identifier (`:sim` or `:tello`) or a module that
+  Accepts an adapter identifier (`:sim`, `:tello`, or `:crazyflie`) or a module that
   implements `Drone.Adapter`. Options are passed to the adapter and
   safety policy.
 

@@ -22,6 +22,7 @@ Drone (Public API)
   |           |
   |           +-- Drone.Adapters.Sim (in-process state machine)
   |           +-- Drone.Adapters.Tello (UDP connection)
+  |           +-- Drone.Adapters.Crazyflie (CRTP / Crazyradio or mock)
   |
   +-- Drone.Command (struct and encoding)
   +-- Drone.Error (error types)

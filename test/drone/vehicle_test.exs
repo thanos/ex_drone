@@ -223,4 +223,98 @@ defmodule Drone.VehicleTest do
       assert telemetry.speed == 0
     end
   end
+
+  describe "AdapterMock edge paths" do
+    import Mox
+    import Drone.Test.MoxHelpers
+
+    alias Drone.Adapter.Capabilities
+
+    setup :set_mox_global
+    setup :verify_on_exit!
+
+    setup do
+      stub_healthy_adapter!()
+      :ok
+    end
+
+    test "get_state and query speed update vehicle state" do
+      name = :"veh_get_#{System.unique_integer([:positive])}"
+      assert {:ok, ^name} = Drone.connect(Drone.AdapterMock, name: name)
+      pid = Vehicle.whereis(name)
+
+      state = GenServer.call(pid, :get_state)
+      assert state.mode == :idle
+
+      assert :ok = Drone.connect_sdk(name)
+      assert :ok = Drone.takeoff(name)
+      assert {:ok, 100} = Drone.query(name, :speed)
+
+      state = GenServer.call(pid, :get_state)
+      assert state.speed == 100
+      assert :ok = Drone.disconnect(name)
+    end
+
+    test "adapter connect failure stops the vehicle" do
+      name = :"veh_boom_#{System.unique_integer([:positive])}"
+
+      expect(Drone.AdapterMock, :connect, fn _ -> {:error, :boom} end)
+
+      assert {:error, :boom} = Drone.connect(Drone.AdapterMock, name: name)
+      assert Vehicle.whereis(name) == nil
+    end
+
+    test "adapter telemetry errors surface to callers" do
+      name = :"veh_tel_#{System.unique_integer([:positive])}"
+      assert {:ok, ^name} = Drone.connect(Drone.AdapterMock, name: name)
+
+      expect(Drone.AdapterMock, :telemetry, fn state -> {:error, :gone, state} end)
+
+      assert {:error, :gone} = Drone.telemetry(name)
+      assert :ok = Drone.disconnect(name)
+    end
+
+    test "disconnect still succeeds when adapter disconnect raises" do
+      name = :"veh_raise_#{System.unique_integer([:positive])}"
+      assert {:ok, ^name} = Drone.connect(Drone.AdapterMock, name: name)
+
+      expect(Drone.AdapterMock, :disconnect, fn _ -> raise "boom" end)
+
+      assert :ok = Drone.disconnect(name)
+      Process.sleep(50)
+      assert Vehicle.whereis(name) == nil
+    end
+
+    test "initial telemetry failure falls back to default vehicle state" do
+      name = :"veh_init_tel_#{System.unique_integer([:positive])}"
+
+      stub(Drone.AdapterMock, :connect, fn _ -> {:ok, %{}} end)
+
+      stub(Drone.AdapterMock, :telemetry, fn state ->
+        {:error, :not_ready, state}
+      end)
+
+      assert {:ok, ^name} = Drone.connect(Drone.AdapterMock, name: name)
+      state = GenServer.call(Vehicle.whereis(name), :get_state)
+      assert state.battery == 100
+      assert state.mode == :idle
+      assert :ok = Drone.disconnect(name)
+    end
+
+    test "estimator sync tolerates post-command telemetry failure" do
+      name = :"veh_est_#{System.unique_integer([:positive])}"
+
+      stub(Drone.AdapterMock, :capabilities, fn _ ->
+        Map.put(Capabilities.tello_like(), :requires_estimator, true)
+      end)
+
+      assert {:ok, ^name} = Drone.connect(Drone.AdapterMock, name: name)
+      assert :ok = Drone.connect_sdk(name)
+
+      stub(Drone.AdapterMock, :telemetry, fn state -> {:error, :stale, state} end)
+
+      assert :ok = Drone.takeoff(name)
+      assert :ok = Drone.disconnect(name)
+    end
+  end
 end

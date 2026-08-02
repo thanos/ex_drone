@@ -181,12 +181,14 @@ The adapter contract must be stable enough for future adapters:
 
 ### Crazyflie (v0.3.0)
 
-- Will use a Port/NIF for communication with cflib
-- Connection will involve a URI (e.g., `radio://0/80/250K`)
-- State will include more detailed telemetry (gyro, accel, etc.)
+- Pure CRTP codecs + Crazyradio transport with pluggable `usb_backend`
+- CI uses `mock://` transport profiles (no USB NIF required in the Hex package)
+- Connection URI: `radio://0/80/2M/E7E7E7E7E7` or `mock://ready`
+- Optional `capabilities/1` (`sdk_mode: :optional`, no flips)
+- High-level commander takeoff / go_to / land / emergency
 - Must implement the same behaviour
 
-### MAVLink (v0.4.0)
+### MAVLink (later)
 
 - Will use a TCP/UDP connection to a MAVLink endpoint
 - State will include full vehicle state (GPS, attitude, etc.)
@@ -204,6 +206,7 @@ classDiagram
         +command(state, command) {:ok, reply, state} | {:error, reason, state}
         +telemetry(state) {:ok, map, state} | {:error, reason, state}
         +disconnect(state) :ok
+        +capabilities(state) map
     }
     
     class Sim {

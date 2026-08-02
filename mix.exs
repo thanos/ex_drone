@@ -4,7 +4,7 @@ defmodule Drone.MixProject do
   def project do
     [
       app: :ex_drone,
-      version: "0.2.0",
+      version: "0.3.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -12,11 +12,14 @@ defmodule Drone.MixProject do
       docs: docs(),
       test_coverage: [
         tool: ExCoveralls,
-        ignore_modules: [FakeTelloServer]
+        ignore_modules: [FakeTelloServer, Drone.Test.MoxHelpers]
       ],
       source_url: "https://github.com/thanos/ex_drone",
       package: package(),
-      description: "BEAM-native drone control for Elixir and Erlang."
+      description: "BEAM-native drone control for Elixir and Erlang.",
+      aliases: [
+        verify: &verify/1
+      ]
     ]
   end
 
@@ -50,6 +53,7 @@ defmodule Drone.MixProject do
         "docs/safety.md": [title: "Safety"],
         "docs/simulator.md": [title: "Simulator"],
         "docs/tello.md": [title: "Tello"],
+        "docs/crazyflie.md": [title: "Crazyflie"],
         "docs/swarm.md": [title: "Swarms"],
         "docs/formations.md": [title: "Formations"],
         "docs/architecture.md": [title: "Architecture"],
@@ -71,6 +75,7 @@ defmodule Drone.MixProject do
           "docs/safety.md",
           "docs/simulator.md",
           "docs/tello.md",
+          "docs/crazyflie.md",
           "docs/swarm.md",
           "docs/formations.md",
           "docs/architecture.md",
@@ -125,5 +130,32 @@ defmodule Drone.MixProject do
         "Further Reading" => "https://hexdocs.pm/ex_drone/further_reading.html"
       }
     ]
+  end
+
+  defp verify(_) do
+    steps = [
+      {"compile --warnings-as-errors", :dev},
+      {"format --check-formatted", :dev},
+      {"credo --strict", :dev},
+      {"dialyzer", :dev},
+      {"test --cover", :test},
+      {"docs --warnings-as-errors", :dev}
+    ]
+
+    Enum.each(steps, fn {task, env} ->
+      Mix.shell().info([:bright, "==> mix #{task}", :reset])
+
+      {_, exit_code} =
+        System.cmd("mix", String.split(task),
+          env: [{"MIX_ENV", to_string(env)}],
+          into: IO.stream()
+        )
+
+      if exit_code != 0 do
+        Mix.raise("mix #{task} failed (exit code #{exit_code})")
+      end
+    end)
+
+    Mix.shell().info([:green, :bright, "\nAll verification checks passed!", :reset])
   end
 end

@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.3.0 (2026-08-02)
+
+### Added
+
+- `Drone.Adapters.Crazyflie` for single-drone Crazyradio / mock high-level flight
+- CRTP encode/decode, high-level commander, supervisor, and platform packets
+- Crazyradio transport with pluggable USB backend (`USB.Unavailable` by default)
+- In-process `Transport.Mock` profiles for CI (`mock://ready`, estimator/battery/unplug)
+- Optional `Drone.Adapter.capabilities/1` and `Drone.Adapter.Capabilities`
+- Mission preflight capability validation (`Mission.validate_capabilities/2`)
+- Safety options `:require_estimator` and `:max_telemetry_age_ms`
+- Guide: `docs/crazyflie.md`
+- Shared adapter acceptance tests for Sim and Crazyflie mock
+
+### Changed
+
+- `Drone.Adapter.resolve/1` recognizes `:crazyflie`
+- Sim and Tello advertise Tello-like capabilities
+- README roadmap: Crazyflie delivered in v0.3.0 (swarms already shipped in v0.2.0)
+
+### Notes
+
+- Real `radio://` links require a user-supplied `usb_backend` implementing
+  `Drone.Adapters.Crazyflie.USB`. BLE, raw attitude, trajectories, and Crazyflie
+  swarms remain deferred.
+
 ## v0.2.0 (2026-07-31)
 
 ### Added
