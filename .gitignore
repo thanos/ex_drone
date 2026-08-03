@@ -10,7 +10,6 @@ erl_crash.dump
 .elixir_ls/
 /priv/plts/*.plt
 /priv/plts/*.plt.hash
-coveralls.json
 *.tar
 /baoulo/
 .DS_Store

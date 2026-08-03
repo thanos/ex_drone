@@ -92,7 +92,7 @@ defmodule Drone do
   @doc """
   Connects to a drone and starts a supervised process.
 
-  Accepts an adapter identifier (`:sim` or `:tello`) or a module that
+  Accepts an adapter identifier (`:sim`, `:tello`, or `:crazyflie`) or a module that
   implements `Drone.Adapter`. Options are passed to the adapter and
   safety policy.
 
@@ -395,6 +395,27 @@ defmodule Drone do
   @spec telemetry(drone()) :: {:ok, map()} | {:error, term()}
   def telemetry(drone) do
     call(drone, :telemetry)
+  end
+
+  @doc """
+  Returns capability metadata for the connected adapter.
+
+  ## Parameters
+
+    * `drone` (`t:drone/0`)
+
+  ## Returns
+
+  `Drone.Adapter.Capabilities.t()` map.
+
+  ## Example
+
+      caps = Drone.capabilities(:my_drone)
+      caps.sdk_mode
+  """
+  @spec capabilities(drone()) :: Drone.Adapter.Capabilities.t()
+  def capabilities(drone) do
+    call(drone, :capabilities)
   end
 
   @doc """

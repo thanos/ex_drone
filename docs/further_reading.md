@@ -15,6 +15,7 @@ background and next steps.
 | [Safety](safety.md) | Policies, geofencing, allowlists, emergency |
 | [Simulator](simulator.md) | In-process adapter, battery, failure injection, initial pose |
 | [Tello](tello.md) | DJI Tello / Tello EDU UDP adapter |
+| [Crazyflie](crazyflie.md) | Crazyflie 2.x via Crazyradio / mock transport |
 | [Swarms](swarm.md) | `Drone.Swarm` membership, fan-out, fail-fast |
 | [Formations](formations.md) | Geometric formation catalog and planners |
 | [Architecture](architecture.md) | Modules, supervision tree, design rationale |
@@ -28,6 +29,7 @@ background and next steps.
 | [Safety Pipeline](design/safety_pipeline.md) | Validation stages and policy model |
 | [Telemetry Events](design/telemetry_events.md) | Vehicle and swarm `:telemetry` events |
 | [v0.2.0 Deferred Work](design/v0_2_0_deferred.md) | Intentionally postponed swarm features |
+| [v0.3.0 Deferred Work](design/v0_3_0_deferred.md) | Intentionally postponed Crazyflie / adapter items |
 
 ### Research notes
 
@@ -41,19 +43,21 @@ background and next steps.
 
 ## Platforms and adapters
 
-ex_drone talks to vehicles through the `Drone.Adapter` behaviour. v0.2.0
-ships an in-process simulator and a DJI Tello UDP adapter. Later milestones
-target Crazyflie and MAVLink-class platforms.
+ex_drone talks to vehicles through the `Drone.Adapter` behaviour. v0.3.0
+ships an in-process simulator, a DJI Tello UDP adapter, and a Crazyflie
+adapter (Crazyradio with pluggable USB backend, plus `mock://` for CI).
 
 - [DJI Tello SDK 2.0 User Guide (PDF)](https://dl-cdn.ryzerobotics.com/downloads/Tello/Tello%20SDK%202.0%20User%20Guide.pdf) - official command and response reference for Tello / Tello EDU
 - [Ryze Tello product page](https://www.ryzerobotics.com/tello) - hardware overview and EDU variants
-- [Bitcraze Crazyflie documentation](https://www.bitcraze.io/documentation/) - lightweight research quadrotor platform (planned adapter)
+- [Bitcraze Crazyflie documentation](https://www.bitcraze.io/documentation/) - research quadrotor platform
+- [CRTP specification](https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/functional-areas/crtp/) - Crazyflie packet protocol
+- [Crazyradio USB protocol](https://www.bitcraze.io/documentation/repository/crazyradio-firmware/master/functional-areas/usb_radio_protocol/) - radio dongle framing
 - [MAVLink protocol](https://mavlink.io/en/) - common message set used by many autopilots (planned adapter)
 - [ArduPilot documentation](https://ardupilot.org/) - autopilot stack often paired with MAVLink
 - [PX4 User Guide](https://docs.px4.io/) - autopilot stack often paired with MAVLink
 - [Nerves Project](https://nerves-project.org/) - Elixir on embedded devices (roadmap: on-drone or companion hosting)
 
-In-repo: [Tello guide](tello.md), [Adapter authoring](adapter_authoring.md),
+In-repo: [Tello guide](tello.md), [Crazyflie guide](crazyflie.md), [Adapter authoring](adapter_authoring.md),
 [Adapter contract](design/adapter_contract.md), [Tello SDK research](research/tello_sdk.md),
 [BEAM UDP research](research/beam_udp.md).
 
@@ -145,11 +149,14 @@ In-repo: [Architecture](architecture.md), [Telemetry events](design/telemetry_ev
 
 ## Related platforms (roadmap context)
 
-These are not shipped adapters in v0.2.0; they are useful reading for later
-milestones and for classroom comparisons.
+Crazyflie single-drone support ships in v0.3.0. The links below remain useful
+for classroom comparisons and for adapters that are still on the roadmap
+(MAVLink, companion-computer hosting, …).
 
 - [Bitcraze Crazyflie docs](https://www.bitcraze.io/documentation/)
 - [MAVLink](https://mavlink.io/en/)
 - [ArduPilot](https://ardupilot.org/)
 - [PX4](https://docs.px4.io/)
 - [Nerves](https://nerves-project.org/)
+
+Deferred Crazyflie / adapter items: [v0.3.0 Deferred Work](design/v0_3_0_deferred.md).

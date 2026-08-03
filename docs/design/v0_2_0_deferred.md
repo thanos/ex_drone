@@ -211,7 +211,8 @@ lack of global pose. No claim of closed-loop choreography on bare Tello.
 
 | Item | Roadmap hint |
 |------|----------------|
-| Crazyflie multi-vehicle via same `Drone.Swarm` | v0.3.0+ |
+| Crazyflie single-drone (Crazyradio / mock) | **Shipped in v0.3.0** — see [Crazyflie guide](../crazyflie.md) |
+| Crazyflie multi-vehicle via same `Drone.Swarm` | Still deferred — see [v0.3.0 Deferred](v0_3_0_deferred.md) |
 | MAVLink / PX4 multi-vehicle + SITL swarm | v0.4.0+ |
 | Adapter position fidelity requirements for formations | When non-sim adapters join swarms |
 | Swarm acceptance tests shared across adapters | With adapter test suite work |

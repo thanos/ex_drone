@@ -50,8 +50,28 @@ defmodule Drone.Adapters.Sim do
 
   @behaviour Drone.Adapter
 
-  alias Drone.{Adapters.Sim.State, Command, Geometry}
+  alias Drone.{Adapter.Capabilities, Adapters.Sim.State, Command, Geometry}
 
+  @doc """
+  Builds in-process simulator state from connect options.
+
+  ## Parameters
+
+    * `opts` (`keyword()`) — simulator knobs forwarded to
+      `Drone.Adapters.Sim.State.new/1`, including:
+      * `:battery`, `:battery_drain_per_*`
+      * `:failure_rate`, `:fail_commands`
+      * `:initial_x`, `:initial_y`, `:initial_z`, `:initial_yaw`
+
+  ## Returns
+
+  `{:ok, Drone.Adapters.Sim.State.t()}`.
+
+  ## Examples
+
+      {:ok, state} =
+        Drone.Adapters.Sim.connect(battery: 80, initial_x: -50)
+  """
   @impl Drone.Adapter
   def connect(opts) do
     sim_opts =
@@ -72,6 +92,27 @@ defmodule Drone.Adapters.Sim do
     {:ok, State.new(sim_opts)}
   end
 
+  @doc """
+  Executes a command against the in-process simulator state machine.
+
+  Applies optional failure injection, mode checks, then updates pose / battery.
+
+  ## Parameters
+
+    * `state` (`Drone.Adapters.Sim.State.t()`) — current sim state
+    * `cmd` (`Drone.Command.t()`) — command to run
+
+  ## Returns
+
+    * `{:ok, reply, State.t()}` — usually `reply` is `:ok` or a query value
+    * `{:error, reason, State.t()}` — simulated failure or mode error
+
+  ## Examples
+
+      {:ok, state} = Drone.Adapters.Sim.connect([])
+      {:ok, :ok, state} =
+        Drone.Adapters.Sim.command(state, Drone.Command.sdk_mode())
+  """
   @impl Drone.Adapter
   def command(%State{} = state, %Command{type: :emergency} = cmd) do
     case check_failure(state, cmd) do
@@ -94,6 +135,17 @@ defmodule Drone.Adapters.Sim do
     end
   end
 
+  @doc """
+  Returns a telemetry snapshot from simulator state.
+
+  ## Parameters
+
+    * `state` (`Drone.Adapters.Sim.State.t()`)
+
+  ## Returns
+
+  `{:ok, map(), State.t()}` including pose, battery, mode, and command counts.
+  """
   @impl Drone.Adapter
   def telemetry(%State{} = state) do
     {:ok,
@@ -111,8 +163,25 @@ defmodule Drone.Adapters.Sim do
      }, state}
   end
 
+  @doc """
+  No-op disconnect for the in-process simulator.
+
+  ## Returns
+
+  Always `:ok`.
+  """
   @impl Drone.Adapter
   def disconnect(%State{}), do: :ok
+
+  @doc """
+  Returns Tello-like capability metadata.
+
+  ## Returns
+
+  `Drone.Adapter.Capabilities.tello_like/0`.
+  """
+  @impl Drone.Adapter
+  def capabilities(%State{}), do: Capabilities.tello_like()
 
   defp check_failure(%State{config: config}, %Command{type: type}) do
     cond do

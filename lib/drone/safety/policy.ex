@@ -63,19 +63,23 @@ defmodule Drone.Safety.Policy do
           dry_run: boolean(),
           indoor: boolean(),
           prop_guards: boolean(),
-          geofence: Drone.Safety.Geofence.t() | nil
+          geofence: Drone.Safety.Geofence.t() | nil,
+          max_telemetry_age_ms: pos_integer() | nil,
+          require_estimator: boolean()
         }
 
   defstruct [
     :max_altitude_cm,
     :max_distance_cm,
     :geofence,
+    :max_telemetry_age_ms,
     min_battery_percent: 15,
     battery_warning_percent: 20,
     allowlist: nil,
     dry_run: false,
     indoor: false,
-    prop_guards: false
+    prop_guards: false,
+    require_estimator: false
   ]
 
   @doc """
@@ -93,6 +97,8 @@ defmodule Drone.Safety.Policy do
     - `:unrestricted` -- if true, applies the unrestricted preset (no limits)
     - `:prop_guards` -- whether prop guards are installed (default: false)
     - `:geofence` -- a geofence to restrict flight area (default: nil)
+    - `:max_telemetry_age_ms` -- reject motion when telemetry is older than this (default: nil)
+    - `:require_estimator` -- reject motion when `estimator_ready` is false (default: false)
   """
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -108,7 +114,9 @@ defmodule Drone.Safety.Policy do
       dry_run: Keyword.get(opts, :dry_run, base.dry_run),
       indoor: Keyword.get(opts, :indoor, base.indoor),
       prop_guards: Keyword.get(opts, :prop_guards, base.prop_guards),
-      geofence: Keyword.get(opts, :geofence, base.geofence)
+      geofence: Keyword.get(opts, :geofence, base.geofence),
+      max_telemetry_age_ms: Keyword.get(opts, :max_telemetry_age_ms, base.max_telemetry_age_ms),
+      require_estimator: Keyword.get(opts, :require_estimator, base.require_estimator)
     }
   end
 
@@ -139,7 +147,9 @@ defmodule Drone.Safety.Policy do
       dry_run: false,
       indoor: false,
       prop_guards: false,
-      geofence: nil
+      geofence: nil,
+      max_telemetry_age_ms: nil,
+      require_estimator: false
     }
   end
 
@@ -163,7 +173,9 @@ defmodule Drone.Safety.Policy do
       dry_run: false,
       indoor: true,
       prop_guards: true,
-      geofence: nil
+      geofence: nil,
+      max_telemetry_age_ms: nil,
+      require_estimator: false
     }
   end
 
@@ -184,7 +196,9 @@ defmodule Drone.Safety.Policy do
       dry_run: false,
       indoor: false,
       prop_guards: true,
-      geofence: nil
+      geofence: nil,
+      max_telemetry_age_ms: nil,
+      require_estimator: false
     }
   end
 end

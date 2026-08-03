@@ -92,6 +92,20 @@ Return errors as `{:error, reason, new_state}`:
 - `:not_flying` -- Movement when grounded
 - `:already_flying` -- Takeoff when airborne
 
+### 6. Optional Capabilities
+
+Implement `capabilities/1` so missions can preflight unsupported commands:
+
+```elixir
+@impl Drone.Adapter
+def capabilities(_state) do
+  Drone.Adapter.Capabilities.tello_like()
+  # or Capabilities.crazyflie(positioning: :flow)
+end
+```
+
+Callers can also use `Drone.capabilities/1` on a connected vehicle.
+
 ## Testing
 
 Test your adapter using the simulator pattern:
@@ -110,7 +124,9 @@ assert telemetry.flying == true
 # Disconnect
 :ok = MyAdapter.disconnect(state)
 ```
+
 ## Further Reading
 
 - Design: [Adapter Contract](design/adapter_contract.md)
-- Platforms and planned adapters: [Further Reading](further_reading.md#platforms-and-adapters)
+- Platforms: [Further Reading](further_reading.md#platforms-and-adapters)
+- Crazyflie example: [Crazyflie guide](crazyflie.md)

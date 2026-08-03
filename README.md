@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/thanos/ex_drone/blob/main/LICENSE)
 [![CI](https://github.com/thanos/ex_drone/actions/workflows/ci.yml/badge.svg)](https://github.com/thanos/ex_drone/actions/workflows/ci.yml) [![Coverage Status](https://coveralls.io/repos/github/thanos/ex_drone/badge.svg?branch=main)](https://coveralls.io/github/thanos/ex_drone?branch=main)
 
-BEAM-native drone control for Elixir and Erlang. Fly, monitor, and simulate programmable drones using supervised processes, telemetry, and missions.
+BEAM-native drone control for Elixir and Erlang. Fly, monitor, and simulate programmable drones — including Tello, Crazyflie (mock or Crazyradio), and multi-drone swarms — using supervised processes, telemetry, and missions.
 
 ## Safety Warning
 
@@ -13,7 +13,8 @@ BEAM-native drone control for Elixir and Erlang. Fly, monitor, and simulate prog
 
 - Do not fly near faces or people
 - Use prop guards at all times
-- Test in the simulator before connecting to real hardware
+- Test in the simulator (or Crazyflie `mock://`) before connecting to real hardware
+- Crazyflie high-level flight requires a working positioning system (Flow, Lighthouse, or Loco)
 - Use open indoor spaces or outdoor areas with clear lines of sight
 - Have an emergency stop ready at all times
 - Understand and follow local laws and regulations
@@ -25,7 +26,7 @@ Add `ex_drone` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:ex_drone, "~> 0.2.0"}
+    {:ex_drone, "~> 0.3.0"}
   ]
 end
 ```
@@ -106,6 +107,31 @@ Drone.disconnect(drone)
 
 See the [Tello guide](docs/tello.md).
 
+## Crazyflie Connection
+
+```elixir
+{:ok, drone} =
+  Drone.connect(:crazyflie,
+    name: :cf_1,
+    uri: "mock://ready",
+    positioning: :flow
+  )
+
+Drone.connect_sdk(drone)
+Drone.takeoff(drone)
+Drone.move(drone, :forward, 50)
+Drone.land(drone)
+Drone.disconnect(drone)
+```
+
+Use `mock://` without hardware. Real Crazyradio links need a `usb_backend`
+implementing `Drone.Adapters.Crazyflie.USB`. See the [Crazyflie guide](docs/crazyflie.md)
+and `examples/crazyflie_mock_flight.exs`.
+
+```shell
+mix run examples/crazyflie_mock_flight.exs
+```
+
 ## Mission Scripts
 
 ```elixir
@@ -123,13 +149,14 @@ mission =
 ## Architecture
 
 - **Drone.Vehicle** -- One GenServer per drone, supervised
-- **Drone.Adapter** -- Behaviour for drone communication (Sim, Tello, future adapters)
+- **Drone.Adapter** -- Behaviour for drone communication (Sim, Tello, Crazyflie)
 - **Drone.Geometry** -- Shared position math (move, rotate, flip deltas)
 - **Drone.Safety** -- Pure validation module, no side effects
 - **Drone.Telemetry** -- `:telemetry` events for observability
 - **Drone.Mission** -- Command sequence DSL
 - **Drone.Swarm** -- Multi-drone coordinator (`start/1`, fan-out, `run/2`/`run/3`)
 - **Drone.Formation** -- One-shot geometric formation planners
+- **Drone.Adapter.Capabilities** -- Per-adapter capability metadata
 
 See the [Architecture guide](docs/architecture.md).
 
@@ -141,6 +168,7 @@ See the [Architecture guide](docs/architecture.md).
 - [Safety](docs/safety.md)
 - [Simulator](docs/simulator.md)
 - [Tello](docs/tello.md)
+- [Crazyflie](docs/crazyflie.md)
 - [Swarms](docs/swarm.md)
 - [Formations](docs/formations.md)
 - [Architecture](docs/architecture.md)
@@ -153,6 +181,7 @@ See the [Architecture guide](docs/architecture.md).
 - [Safety Pipeline](docs/design/safety_pipeline.md)
 - [Telemetry Events](docs/design/telemetry_events.md)
 - [v0.2.0 Deferred Work](docs/design/v0_2_0_deferred.md)
+- [v0.3.0 Deferred Work](docs/design/v0_3_0_deferred.md)
 
 ### Research
 
@@ -216,14 +245,21 @@ Multi-drone coordination on the v0.1.0 vehicle model.
 - [x] Good Advisor / Bad Advisor example
 - [x] Deferred flocking / closed-loop catalogue (`docs/design/v0_2_0_deferred.md`)
 
-### v0.3.0 — Adapters & Resilience
+### v0.3.0 — Crazyflie Adapter & Capabilities
 
-New hardware adapters, command retry, async missions, and reconnect.
+Single-drone Crazyflie high-level flight, capability reporting, and shared adapter contracts.
 
-- [ ] `Drone.Adapters.Crazyflie` — Crazyflie BLE/USB adapter
+- [x] `Drone.Adapters.Crazyflie` — Crazyradio / mock high-level position flight
+- [x] CRTP logging subscribe — battery (`pm.batteryLevel` / `pm.vbat`) + `sys.canfly`
+- [x] Optional SafeLink negotiation (`?safelink=1`)
+- [x] Pluggable `usb_backend` (`Drone.Adapters.Crazyflie.USB`)
+- [x] Adapter capabilities — optional `capabilities/1` + `Drone.capabilities/1`
+- [x] Common adapter acceptance tests — shared Sim / Crazyflie contract checks
+- [x] Capability-aware mission validation before takeoff
+- [x] Estimator / stale-telemetry safety options (fail closed)
+- [x] Deferred catalogue (`docs/design/v0_3_0_deferred.md`)
 - [ ] `Drone.Adapters.MAVLink` — MAVLink-compatible drones via serial/UDP
 - [ ] Adapter registry — `Drone.Adapter.register/2` for third-party adapters
-- [ ] Common adapter test suite — shared `Drone.Adapter.Acceptance` tests
 - [ ] Command retry with configurable backoff (`safe_to_retry?/1` already in `Drone.Command`)
 - [ ] `Mission.run_async/2` — fire-and-forget mission execution with progress events
 - [ ] Reconnect on adapter failure — Vehicle auto-reconnects after network errors

@@ -12,12 +12,14 @@ defmodule Drone.AdapterTest do
       assert {:ok, Drone.Adapters.Tello} = Adapter.resolve(:tello)
     end
 
-    test "passes through module atoms" do
-      assert {:ok, MyCustomAdapter} = Adapter.resolve(MyCustomAdapter)
+    test "passes through loaded adapter modules" do
+      assert {:ok, Drone.Adapters.CountingAdapter} =
+               Adapter.resolve(Drone.Adapters.CountingAdapter)
     end
 
     test "returns error for unknown adapter" do
       assert {:error, :unknown_adapter} = Adapter.resolve("not an atom")
+      assert {:error, :unknown_adapter} = Adapter.resolve(:nope_not_an_adapter)
     end
   end
 end

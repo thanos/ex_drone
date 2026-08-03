@@ -7,7 +7,8 @@ defmodule Drone.Adapter do
   `Drone.Vehicle` GenServer calls adapter callbacks, passing opaque adapter
   state.
 
-  Built-in adapters: `Drone.Adapters.Sim`, `Drone.Adapters.Tello`.
+  Built-in adapters: `Drone.Adapters.Sim`, `Drone.Adapters.Tello`,
+  `Drone.Adapters.Crazyflie`.
 
   ## Implementing an Adapter
 
@@ -74,6 +75,8 @@ defmodule Drone.Adapter do
 
   See `docs/adapter_authoring.md` for a complete guide.
   """
+
+  alias Drone.Adapter.Capabilities
 
   @typedoc """
   Opaque adapter state held by `Drone.Vehicle`.
@@ -211,31 +214,86 @@ defmodule Drone.Adapter do
   """
   @callback disconnect(state :: state()) :: :ok
 
-  @optional_callbacks [disconnect: 1]
+  @doc """
+  Returns capability metadata for the connected adapter.
+
+  Optional. When omitted, callers treat the adapter as Tello-shaped
+  (`Drone.Adapter.Capabilities.tello_like/0`).
+
+  ## Parameters
+
+    * `state` (`t:state/0`) — current adapter state
+
+  ## Returns
+
+  `Drone.Adapter.Capabilities.t()`.
+
+  ## Example implementation
+
+      @impl Drone.Adapter
+      def capabilities(%__MODULE__{positioning: positioning}) do
+        Drone.Adapter.Capabilities.crazyflie(positioning: positioning)
+      end
+  """
+  @callback capabilities(state :: state()) :: Capabilities.t()
+
+  @optional_callbacks [disconnect: 1, capabilities: 1]
 
   @doc """
   Returns the adapter module for a given adapter identifier.
 
   ## Parameters
 
-    * `adapter` (`atom() | module()`) — `:sim`, `:tello`, or a module that
-      implements this behaviour
+    * `adapter` (`atom() | module()`) — `:sim`, `:tello`, `:crazyflie`, or a
+      module that implements this behaviour
 
   ## Returns
 
-    * `{:ok, module()}` — resolved module
-    * `{:error, :unknown_adapter}` — reserved for future use; bare atoms that
-      are not `:sim`/`:tello` are currently treated as modules
+    * `{:ok, module()}` — resolved module that exports `connect/1`
+    * `{:error, :unknown_adapter}` — unknown built-in key or unloaded module
 
   ## Examples
 
       {:ok, Drone.Adapters.Sim} = Drone.Adapter.resolve(:sim)
       {:ok, Drone.Adapters.Tello} = Drone.Adapter.resolve(:tello)
+      {:ok, Drone.Adapters.Crazyflie} = Drone.Adapter.resolve(:crazyflie)
       {:ok, MyApp.DroneAdapter} = Drone.Adapter.resolve(MyApp.DroneAdapter)
   """
   @spec resolve(atom() | module()) :: {:ok, module()} | {:error, :unknown_adapter}
   def resolve(:sim), do: {:ok, Drone.Adapters.Sim}
   def resolve(:tello), do: {:ok, Drone.Adapters.Tello}
-  def resolve(module) when is_atom(module), do: {:ok, module}
+  def resolve(:crazyflie), do: {:ok, Drone.Adapters.Crazyflie}
+
+  def resolve(module) when is_atom(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :connect, 1) do
+      {:ok, module}
+    else
+      {:error, :unknown_adapter}
+    end
+  end
+
   def resolve(_), do: {:error, :unknown_adapter}
+
+  @doc """
+  Returns capabilities for an adapter state, with a Tello-like default.
+
+  ## Parameters
+
+    * `module` (`module()`) — adapter module
+    * `state` (`t:state/0`) — adapter state from `connect/1`
+
+  ## Returns
+
+  `Drone.Adapter.Capabilities.t()`.
+  """
+  @spec capabilities(module(), state()) :: Capabilities.t()
+  def capabilities(module, state) when is_atom(module) do
+    _ = Code.ensure_loaded(module)
+
+    if function_exported?(module, :capabilities, 1) do
+      module.capabilities(state)
+    else
+      Capabilities.tello_like()
+    end
+  end
 end

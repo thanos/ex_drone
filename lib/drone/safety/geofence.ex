@@ -11,8 +11,33 @@ defmodule Drone.Safety.Geofence do
     - Polygon: defined by a list of vertices
 
   Coordinates are in centimeters from the launch point.
+
+  ## Examples
+
+      fence = Drone.Safety.Geofence.radius(300)
+      true = Drone.Safety.Geofence.contains?(fence, {100, 100})
+      false = Drone.Safety.Geofence.contains?(fence, {400, 0})
   """
 
+  @typedoc """
+  Geofence struct describing an allowed XY region in centimeters.
+
+  | Field | Type | Meaning |
+  | --- | --- | --- |
+  | `:type` | `:circle` \\| `:polygon` | Shape discriminant |
+  | `:center` | `{integer(), integer()}` \\| `nil` | Circle center `(x, y)` cm |
+  | `:radius_cm` | `pos_integer()` \\| `nil` | Circle radius in centimeters |
+  | `:points` | `[{integer(), integer()}]` \\| `nil` | Polygon vertices in order |
+
+  ## Examples
+
+      %Drone.Safety.Geofence{type: :circle, center: {0, 0}, radius_cm: 250}
+
+      %Drone.Safety.Geofence{
+        type: :polygon,
+        points: [{0, 0}, {200, 0}, {200, 200}, {0, 200}]
+      }
+  """
   @type t :: %__MODULE__{
           type: :circle | :polygon,
           center: {integer(), integer()} | nil,
@@ -24,6 +49,20 @@ defmodule Drone.Safety.Geofence do
 
   @doc """
   Creates a circular geofence centred at the given point with the given radius.
+
+  ## Parameters
+
+    * `center` (`{integer(), integer()}`) — `(x, y)` in centimeters
+    * `radius_cm` (`pos_integer()`) — allowed radius in centimeters
+
+  ## Returns
+
+  `t:t/0` with `:type` `:circle`.
+
+  ## Examples
+
+      fence = Drone.Safety.Geofence.circle({50, -20}, 150)
+      :circle = fence.type
   """
   @spec circle({integer(), integer()}, pos_integer()) :: t()
   def circle(center, radius_cm) do
@@ -35,6 +74,26 @@ defmodule Drone.Safety.Geofence do
 
   The polygon must have at least 3 vertices. The last vertex is automatically
   connected to the first.
+
+  ## Parameters
+
+    * `points` (`[{integer(), integer()}]`) — vertices in centimeters (3+)
+
+  ## Returns
+
+  `t:t/0` with `:type` `:polygon`.
+
+  ## Examples
+
+      fence =
+        Drone.Safety.Geofence.polygon([
+          {0, 0},
+          {300, 0},
+          {300, 200},
+          {0, 200}
+        ])
+
+      :polygon = fence.type
   """
   @spec polygon([{integer(), integer()}]) :: t()
   def polygon([_, _, _ | _] = points) do
@@ -44,7 +103,20 @@ defmodule Drone.Safety.Geofence do
   @doc """
   Creates a circular geofence centred at the origin with the given radius.
 
-  This is a convenience for defining a radius around the launch point.
+  Convenience for a radius around the launch point.
+
+  ## Parameters
+
+    * `radius_cm` (`pos_integer()`) — radius in centimeters
+
+  ## Returns
+
+  `t:t/0` circle centered at `{0, 0}`.
+
+  ## Examples
+
+      %Drone.Safety.Geofence{center: {0, 0}, radius_cm: 200} =
+        Drone.Safety.Geofence.radius(200)
   """
   @spec radius(pos_integer()) :: t()
   def radius(radius_cm) do
@@ -55,6 +127,23 @@ defmodule Drone.Safety.Geofence do
   Checks whether a point is inside the geofence.
 
   Returns `true` if the point is inside or on the boundary, `false` otherwise.
+  A `nil` fence always contains every point.
+
+  ## Parameters
+
+    * `fence` (`t:t/0` \\| `nil`) — geofence or disabled (`nil`)
+    * `point` (`{integer(), integer()}`) — `(x, y)` in centimeters
+
+  ## Returns
+
+  `boolean()`.
+
+  ## Examples
+
+      fence = Drone.Safety.Geofence.circle({0, 0}, 100)
+      true = Drone.Safety.Geofence.contains?(fence, {0, 100})
+      false = Drone.Safety.Geofence.contains?(fence, {101, 0})
+      true = Drone.Safety.Geofence.contains?(nil, {10_000, 10_000})
   """
   @spec contains?(t() | nil, {integer(), integer()}) :: boolean()
   def contains?(nil, _point), do: true

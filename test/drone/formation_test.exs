@@ -330,5 +330,97 @@ defmodule Drone.FormationTest do
                  origin: {:xy, 0, 0}
                })
     end
+
+    test "accepts keyword opts and auto grid columns" do
+      assert {:ok, missions} =
+               Formation.plan(:front,
+                 drones: [:a, :b],
+                 positions: positions(a: {0, 0, 0}, b: {0, 0, 0}),
+                 heading_deg: 0,
+                 spacing_cm: 100,
+                 min_separation_cm: 80,
+                 origin: {:xy, 0, 0}
+               )
+
+      assert map_size(missions) == 2
+
+      assert {:ok, grid} =
+               Formation.plan(:grid, %{
+                 drones: [:a, :b, :c, :d],
+                 positions: positions(a: {0, 0, 0}, b: {0, 0, 0}, c: {0, 0, 0}, d: {0, 0, 0}),
+                 spacing_cm: 100,
+                 min_separation_cm: 50,
+                 origin: {:xy, 0, 0},
+                 columns: :auto
+               })
+
+      assert map_size(grid) == 4
+    end
+
+    test "rejects missing drones, bad heading, and non-map opts" do
+      assert {:error, :too_few_drones} = Formation.plan(:front, %{positions: %{}})
+      assert {:error, :too_few_drones} = Formation.plan(:front, %{drones: []})
+
+      assert {:error, :invalid_option} =
+               Formation.plan(:front, %{
+                 drones: [:a, :b],
+                 positions: positions(a: {0, 0, 0}, b: {0, 0, 0}),
+                 heading_deg: 1.5,
+                 origin: {:xy, 0, 0}
+               })
+
+      assert {:error, :unsupported_formation} = Formation.plan(:front, :not_a_map)
+    end
+
+    test "splits long relocation into SDK-sized forward segments" do
+      # Slot for :a is at x=-50 for two-drone front at origin {0,0}; place a far away.
+      assert {:ok, missions} =
+               Formation.plan(:front, %{
+                 drones: [:a, :b],
+                 positions: %{
+                   a: %{x: -50, y: -700, z: 0, yaw: 0},
+                   b: %{x: 50, y: 0, z: 0, yaw: 0}
+                 },
+                 heading_deg: 0,
+                 spacing_cm: 100,
+                 min_separation_cm: 80,
+                 origin: {:xy, 0, 0}
+               })
+
+      moves =
+        missions.a
+        |> Mission.commands()
+        |> Enum.filter(&(&1.type == :move))
+
+      assert match?([_, _ | _], moves)
+      distances = Enum.map(moves, &Keyword.fetch!(&1.args, :distance))
+      assert Enum.all?(distances, &(&1 >= 20 and &1 <= 500))
+      assert Enum.sum(distances) == 700
+    end
+
+    test "redistributes remainder under 20 cm across long segments" do
+      # Distance 510 → remainder 10 < 20, so first segment shrinks and rest is 20.
+      assert {:ok, missions} =
+               Formation.plan(:front, %{
+                 drones: [:a, :b],
+                 positions: %{
+                   a: %{x: -50, y: -510, z: 0, yaw: 0},
+                   b: %{x: 50, y: 0, z: 0, yaw: 0}
+                 },
+                 heading_deg: 0,
+                 spacing_cm: 100,
+                 min_separation_cm: 80,
+                 origin: {:xy, 0, 0}
+               })
+
+      distances =
+        missions.a
+        |> Mission.commands()
+        |> Enum.filter(&(&1.type == :move))
+        |> Enum.map(&Keyword.fetch!(&1.args, :distance))
+
+      assert Enum.sum(distances) == 510
+      assert Enum.all?(distances, &(&1 >= 20 and &1 <= 500))
+    end
   end
 end

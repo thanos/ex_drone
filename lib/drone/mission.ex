@@ -23,7 +23,7 @@ defmodule Drone.Mission do
       {:ok, results} = Drone.Mission.run(mission, :my_drone)
   """
 
-  alias Drone.{Command, Vehicle}
+  alias Drone.{Adapter.Capabilities, Command, Vehicle}
 
   @typedoc """
   A scripted sequence of drone commands.
@@ -373,14 +373,47 @@ defmodule Drone.Mission do
       {:ok, [_takeoff, _move, _land]} = Drone.Mission.run(mission, :demo)
   """
   @spec run(t(), atom()) :: {:ok, [term()]} | {:error, Command.t(), term()}
-  def run(%__MODULE__{commands: commands}, drone_name) do
+  def run(%__MODULE__{commands: commands} = mission, drone_name) do
     pid = Vehicle.whereis(drone_name)
 
     if pid do
-      run_commands(Enum.reverse(commands), pid, [])
+      caps = GenServer.call(pid, :capabilities)
+
+      case validate_capabilities(mission, caps) do
+        :ok -> run_commands(Enum.reverse(commands), pid, [])
+        {:error, cmd, reason} -> {:error, cmd, reason}
+      end
     else
       {:error, Command.sdk_mode(), {:no_process, drone_name}}
     end
+  end
+
+  @doc """
+  Validates that every command in the mission is supported by `capabilities`.
+
+  Fails before takeoff so unsupported missions do not partially execute.
+  """
+  @spec validate_capabilities(t(), Capabilities.t()) :: :ok | {:error, Command.t(), term()}
+  def validate_capabilities(%__MODULE__{commands: commands}, caps) when is_map(caps) do
+    commands
+    |> Enum.reverse()
+    |> Enum.find_value(:ok, fn
+      %Command{type: :query, args: args} = cmd ->
+        query = Keyword.get(args, :type)
+
+        if Capabilities.supports_query?(caps, query) do
+          false
+        else
+          {:error, cmd, {:unsupported_query, query}}
+        end
+
+      %Command{type: type} = cmd ->
+        if Capabilities.supports_command?(caps, type) do
+          false
+        else
+          {:error, cmd, {:unsupported_command, type}}
+        end
+    end)
   end
 
   defp run_commands([], _pid, results), do: {:ok, Enum.reverse(results)}

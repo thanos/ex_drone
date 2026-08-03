@@ -308,6 +308,86 @@ defmodule Drone.SwarmTest do
       assert {:error, :not_found} = Drone.Swarm.run(:no_such_swarm, :front)
       assert {:error, :not_found} = Drone.Swarm.emergency(:no_such_swarm)
     end
+
+    test "starts from bare atom members and rejects duplicate names" do
+      a = uniq("bare_a")
+      b = uniq("bare_b")
+      name = uniq("named_swarm")
+
+      assert {:ok, swarm} = Drone.Swarm.start([a, b])
+      assert {:ok, [^a, ^b]} = Drone.Swarm.members(swarm)
+      assert :ok = Drone.Swarm.stop(swarm)
+
+      assert {:ok, ^name} =
+               Drone.Swarm.start(
+                 name: name,
+                 members: [{uniq("x"), adapter: :sim}, {uniq("y"), adapter: :sim}]
+               )
+
+      assert {:error, :name_already_taken} =
+               Drone.Swarm.start(
+                 name: name,
+                 members: [{uniq("u"), adapter: :sim}, {uniq("v"), adapter: :sim}]
+               )
+
+      assert :ok = Drone.Swarm.stop(name)
+    end
+
+    test "custom fun may return {:ok, value}" do
+      {swarm, _a, _b} = start_pair()
+
+      assert {:ok, :done} = Drone.Swarm.run(swarm, fn _ -> {:ok, :done} end)
+      assert :ok = Drone.Swarm.stop(swarm)
+    end
+
+    test "rejects unsupported run targets" do
+      {swarm, a, _b} = start_pair()
+
+      assert {:error, :unsupported_run_target} = Drone.Swarm.run(swarm, "front")
+      assert {:error, :unsupported_run_target} = Drone.Swarm.run(swarm, %{a => :not_a_mission})
+      assert :ok = Drone.Swarm.stop(swarm)
+    end
+
+    test "drops crashed members from membership" do
+      {swarm, a, b} = start_pair()
+      pid = Drone.Vehicle.whereis(a)
+      Process.exit(pid, :kill)
+      Process.sleep(50)
+
+      assert {:ok, members} = Drone.Swarm.members(swarm)
+      assert members == [b]
+      refute a in members
+
+      assert {:ok, _} = Drone.Swarm.emergency(swarm)
+      assert :ok = Drone.Swarm.stop(swarm)
+    end
+
+    test "ignores unknown handle_info messages" do
+      {swarm, _a, _b} = start_pair()
+      pid = Drone.Swarm.whereis(swarm)
+      send(pid, :unexpected_noise)
+      Process.sleep(20)
+      assert Process.alive?(pid)
+      assert :ok = Drone.Swarm.stop(swarm)
+    end
+
+    test "formation run fails when member telemetry errors" do
+      a = uniq("ft_a")
+      b = uniq("ft_b")
+
+      assert {:ok, swarm} =
+               Drone.Swarm.start(
+                 members: [
+                   {a, adapter: Drone.Adapters.FailingTelemAdapter, fail: :telemetry_error},
+                   {b, adapter: :sim, initial_x: 100}
+                 ]
+               )
+
+      assert {:ok, _} = Drone.Swarm.connect_sdk(swarm)
+      assert {:error, {^a, :link_lost}} = Drone.Swarm.telemetry(swarm)
+      assert {:error, {^a, :link_lost}} = Drone.Swarm.run(swarm, :front)
+      assert :ok = Drone.Swarm.stop(swarm)
+    end
   end
 
   describe "lifecycle" do

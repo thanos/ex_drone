@@ -38,6 +38,11 @@ defmodule Drone.GeometryTest do
     test "counter-clockwise subtracts degrees and wraps" do
       assert Geometry.rotate_yaw(:ccw, 10, 20) == 350
     end
+
+    test "large rotations stay non-negative" do
+      assert Geometry.rotate_yaw(:ccw, 10, 720) == 10
+      assert Geometry.rotate_yaw(:cw, 10, 720) == 10
+    end
   end
 
   describe "flip_delta/1" do

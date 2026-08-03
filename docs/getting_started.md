@@ -13,7 +13,7 @@ Add `ex_drone` to your dependencies:
 ```elixir
 def deps do
   [
-    {:ex_drone, "~> 0.2.0"}
+    {:ex_drone, "~> 0.3.0"}
   ]
 end
 ```
@@ -90,9 +90,33 @@ Drone.takeoff(drone)
 ```
 
 Always test your missions in the simulator first.
+
+## Connecting to a Crazyflie (mock)
+
+No hardware required — use the in-process mock transport:
+
+```elixir
+{:ok, drone} =
+  Drone.connect(:crazyflie,
+    name: :cf_1,
+    uri: "mock://ready",
+    positioning: :flow
+  )
+
+Drone.connect_sdk(drone)
+Drone.takeoff(drone)
+Drone.move(drone, :forward, 50)
+Drone.land(drone)
+Drone.disconnect(drone)
+```
+
+For Crazyradio hardware, pass a `usb_backend` implementing
+`Drone.Adapters.Crazyflie.USB`. See the [Crazyflie guide](crazyflie.md).
+
 ## Next Steps
 
 - [Safety](safety.md) — policies, geofencing, allowlists
 - [Simulator](simulator.md) — failure injection and initial pose
+- [Crazyflie](crazyflie.md) — radio URIs, logging, SafeLink, readiness
 - [Swarms](swarm.md) and [Formations](formations.md) — multi-drone coordination
 - [Further Reading](further_reading.md) — platforms, planners, and research

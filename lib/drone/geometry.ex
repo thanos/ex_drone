@@ -32,8 +32,8 @@ defmodule Drone.Geometry do
   Returns the new yaw after rotating `degrees` in the given direction.
   """
   @spec rotate_yaw(:cw | :ccw, integer(), integer()) :: integer()
-  def rotate_yaw(:cw, yaw, degrees), do: rem(yaw + degrees, 360)
-  def rotate_yaw(:ccw, yaw, degrees), do: rem(yaw - degrees + 360, 360)
+  def rotate_yaw(:cw, yaw, degrees), do: Integer.mod(yaw + degrees, 360)
+  def rotate_yaw(:ccw, yaw, degrees), do: Integer.mod(yaw - degrees, 360)
 
   defp forward_delta(distance, yaw) do
     radians = yaw * :math.pi() / 180

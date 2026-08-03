@@ -13,10 +13,30 @@ defmodule Drone.Safety do
   Emergency commands bypass all safety checks.
   """
 
-  alias Drone.{Command, Error, Safety.Geofence, Safety.Policy}
+  alias Drone.{Command, Error, Geometry, Safety.Geofence, Safety.Policy}
 
+  @typedoc """
+  Safety rejection reasons (same set as `t:Drone.Error.safety_reason/0`).
+
+  ## Examples
+
+      :max_altitude
+      :geofence_violation
+  """
   @type rejection_reason :: Error.safety_reason()
 
+  @typedoc """
+  Non-fatal warnings attached to an approved command.
+
+  | Value | Meaning |
+  | --- | --- |
+  | `:low_battery` | Battery below soft warning threshold |
+  | `:no_prop_guards` | Flip allowed but prop guards are not fitted |
+
+  ## Examples
+
+      :low_battery
+  """
   @type warning :: :low_battery | :no_prop_guards
 
   # Tello SDK protocol limits.
@@ -27,6 +47,24 @@ defmodule Drone.Safety do
   @min_speed_cm_s 10
   @max_speed_cm_s 100
 
+  @typedoc """
+  Vehicle kinematics / mode snapshot used by `check/3`.
+
+  | Field | Type | Meaning |
+  | --- | --- | --- |
+  | `:mode` | `:idle` \\| `:sdk_mode` \\| `:flying` \\| `:emergency` | Flight mode |
+  | `:x`, `:y`, `:z` | `integer()` | Position in centimeters from launch |
+  | `:yaw` | `integer()` | Heading in degrees |
+  | `:battery` | `integer()` | Percent 0..100 |
+  | `:flying` | `boolean()` | Whether airborne |
+
+  Optional extras used by some policies: `:estimator_ready` (`boolean()`),
+  `:telemetry_at` (`integer()` monotonic ms).
+
+  ## Example
+
+      %{mode: :flying, x: 0, y: 100, z: 50, yaw: 0, battery: 80, flying: true}
+  """
   @type vehicle_state :: %{
           mode: :idle | :sdk_mode | :flying | :emergency,
           x: integer(),
@@ -40,13 +78,39 @@ defmodule Drone.Safety do
   @doc """
   Validates a command against a safety policy and vehicle state.
 
-  Returns:
+  ## Parameters
 
-    - `{:ok, command}` -- the command is approved
-    - `{:ok, command, warnings}` -- the command is approved with warnings
-    - `{:error, :safety, reason}` -- the command is rejected
+    * `command` (`Drone.Command.t()`) — candidate command
+    * `policy` (`Drone.Safety.Policy.t()`) — active limits and flags
+    * `state` (`t:vehicle_state/0`) — current kinematics / mode
 
-  Emergency commands always pass.
+  ## Returns
+
+    * `{:ok, command}` — approved with no warnings
+    * `{:ok, command, warnings}` — approved with `t:warning/0` list
+    * `{:error, :safety, reason}` — rejected (`t:rejection_reason/0`)
+
+  Emergency commands always pass and bypass other checks.
+
+  ## Examples
+
+      policy = Drone.Safety.Policy.new(max_altitude_cm: 100)
+
+      {:ok, cmd} =
+        Drone.Safety.check(
+          Drone.Command.takeoff(),
+          policy,
+          %{mode: :sdk_mode, x: 0, y: 0, z: 0, yaw: 0, battery: 90, flying: false}
+        )
+
+      {:error, :safety, :already_flying} =
+        Drone.Safety.check(
+          Drone.Command.takeoff(),
+          policy,
+          %{mode: :flying, x: 0, y: 0, z: 50, yaw: 0, battery: 90, flying: true}
+        )
+
+      {:ok, _cmd} = Drone.Safety.check(Drone.Command.emergency(), policy, %{})
   """
   @spec check(Command.t(), Policy.t(), vehicle_state()) ::
           {:ok, Command.t()}
@@ -61,6 +125,8 @@ defmodule Drone.Safety do
          :ok <- validate_mode(cmd, state),
          :ok <- validate_allowlist(cmd, policy),
          :ok <- validate_flying_requirement(cmd, state),
+         :ok <- validate_estimator(cmd, policy, state),
+         :ok <- validate_telemetry_freshness(cmd, policy, state),
          :ok <- validate_altitude(cmd, policy, state),
          :ok <- validate_distance(cmd, policy, state),
          :ok <- validate_battery(cmd, policy, state),
@@ -164,6 +230,42 @@ defmodule Drone.Safety do
 
   defp validate_flying_requirement(_cmd, _state), do: :ok
 
+  defp validate_estimator(%Command{type: type}, %Policy{require_estimator: true}, state)
+       when type in [:takeoff, :move, :rotate, :land] do
+    case Map.get(state, :estimator_ready) do
+      true -> :ok
+      false -> Error.safety(:estimator_not_ready)
+      # Missing or unknown: fail closed when the policy requires an estimator.
+      _ -> Error.safety(:estimator_not_ready)
+    end
+  end
+
+  defp validate_estimator(_cmd, _policy, _state), do: :ok
+
+  defp validate_telemetry_freshness(
+         %Command{type: type},
+         %Policy{max_telemetry_age_ms: max_age},
+         state
+       )
+       when type in [:takeoff, :move, :rotate, :land] and is_integer(max_age) and max_age > 0 do
+    case Map.get(state, :telemetry_at) do
+      ts when is_integer(ts) ->
+        age = System.monotonic_time(:millisecond) - ts
+
+        if age <= max_age do
+          :ok
+        else
+          Error.safety(:stale_telemetry)
+        end
+
+      _ ->
+        # When a max age is configured, missing timestamps are stale.
+        Error.safety(:stale_telemetry)
+    end
+  end
+
+  defp validate_telemetry_freshness(_cmd, _policy, _state), do: :ok
+
   defp validate_altitude(
          %Command{type: :move, args: _args},
          %Policy{max_altitude_cm: nil},
@@ -195,8 +297,8 @@ defmodule Drone.Safety do
 
   defp validate_altitude(%Command{type: :takeoff}, %Policy{max_altitude_cm: nil}, _state), do: :ok
 
-  defp validate_altitude(%Command{type: :takeoff}, %Policy{max_altitude_cm: max_z}, _state) do
-    takeoff_height = 30
+  defp validate_altitude(%Command{type: :takeoff}, %Policy{max_altitude_cm: max_z}, state) do
+    takeoff_height = Map.get(state, :takeoff_height_cm, 30)
 
     if takeoff_height <= max_z do
       :ok
@@ -218,15 +320,8 @@ defmodule Drone.Safety do
        ) do
     distance = Keyword.get(args, :distance, 0)
     direction = Keyword.get(args, :direction)
-
-    {dx, dy} =
-      case direction do
-        :forward -> {0, distance}
-        :back -> {0, -distance}
-        :left -> {-distance, 0}
-        :right -> {distance, 0}
-        _ -> {0, 0}
-      end
+    yaw = state[:yaw] || 0
+    {dx, dy, _dz} = Geometry.move_delta(direction, distance, yaw)
 
     new_x = (state[:x] || 0) + dx
     new_y = (state[:y] || 0) + dy
@@ -268,15 +363,8 @@ defmodule Drone.Safety do
        ) do
     distance = Keyword.get(args, :distance, 0)
     direction = Keyword.get(args, :direction)
-
-    {dx, dy} =
-      case direction do
-        :forward -> {0, distance}
-        :back -> {0, -distance}
-        :left -> {-distance, 0}
-        :right -> {distance, 0}
-        _ -> {0, 0}
-      end
+    yaw = state[:yaw] || 0
+    {dx, dy, _dz} = Geometry.move_delta(direction, distance, yaw)
 
     new_x = (state[:x] || 0) + dx
     new_y = (state[:y] || 0) + dy

@@ -39,6 +39,7 @@ defmodule Drone.Adapters.Tello do
   @behaviour Drone.Adapter
 
   alias Drone.{
+    Adapter.Capabilities,
     Adapters.Tello.Connection,
     Adapters.Tello.Encoder,
     Adapters.Tello.Parser,
@@ -59,6 +60,31 @@ defmodule Drone.Adapters.Tello do
     yaw: 0
   ]
 
+  @typedoc """
+  Tello adapter state held by `Drone.Vehicle`.
+
+  | Field | Type | Meaning |
+  | --- | --- | --- |
+  | `:socket` | `port()` \\| `nil` | UDP socket used for SDK commands |
+  | `:drone_ip` | `:inet.ip_address()` | Drone address (default `{192, 168, 10, 1}`) |
+  | `:drone_port` | `non_neg_integer()` | Drone command port (default `8889`) |
+  | `:timeout` | `non_neg_integer()` | Command reply timeout in ms |
+  | `:mode` | `:idle` \\| `:sdk_mode` \\| `:flying` \\| `:emergency` | Flight mode |
+  | `:flying` | `boolean()` | Whether airborne |
+  | `:x`, `:y`, `:z` | `integer()` | Dead-reckoned position in centimeters |
+  | `:yaw` | `integer()` | Heading in degrees |
+
+  ## Example
+
+      %Drone.Adapters.Tello{
+        drone_ip: {192, 168, 10, 1},
+        drone_port: 8889,
+        timeout: 10_000,
+        mode: :flying,
+        flying: true,
+        z: 50
+      }
+  """
   @type t :: %__MODULE__{
           socket: port() | nil,
           drone_ip: :inet.ip_address(),
@@ -72,6 +98,30 @@ defmodule Drone.Adapters.Tello do
           yaw: integer()
         }
 
+  @doc """
+  Opens a UDP socket and returns initial Tello adapter state.
+
+  ## Parameters
+
+    * `opts` (`keyword()`) — common keys:
+      * `:drone_ip` (`:inet.ip_address()`) — default `{192, 168, 10, 1}`
+      * `:drone_port` (`non_neg_integer()`) — default `8889`
+      * `:local_port` (`non_neg_integer()`) — local bind port
+      * `:timeout` (`non_neg_integer()`) — reply timeout ms
+
+  ## Returns
+
+    * `{:ok, t()}` — connected (socket open; SDK mode not yet entered)
+    * `{:error, term()}` — socket open failure
+
+  ## Examples
+
+      {:ok, state} =
+        Drone.Adapters.Tello.connect(
+          drone_ip: {192, 168, 10, 1},
+          local_port: 9030
+        )
+  """
   @impl Drone.Adapter
   def connect(opts) do
     ip = Keyword.get(opts, :drone_ip, Connection.default_drone_ip())
@@ -95,6 +145,24 @@ defmodule Drone.Adapters.Tello do
     end
   end
 
+  @doc """
+  Sends an encoded SDK command over UDP and updates dead-reckoned state.
+
+  ## Parameters
+
+    * `state` (`t:t/0`) — open adapter state
+    * `cmd` (`Drone.Command.t()`) — command to encode and send
+
+  ## Returns
+
+    * `{:ok, reply, t()}` — parsed reply (`:ok` or query value)
+    * `{:error, reason, t()}` — UDP or parse failure
+
+  ## Examples
+
+      {:ok, :ok, state} =
+        Drone.Adapters.Tello.command(state, Drone.Command.sdk_mode())
+  """
   @impl Drone.Adapter
   def command(
         %__MODULE__{socket: socket, drone_ip: ip, drone_port: port, timeout: timeout} = state,
@@ -123,6 +191,17 @@ defmodule Drone.Adapters.Tello do
     end
   end
 
+  @doc """
+  Returns a telemetry snapshot from dead-reckoned adapter fields.
+
+  ## Parameters
+
+    * `state` (`t:t/0`)
+
+  ## Returns
+
+  `{:ok, map(), t()}` with `:x`, `:y`, `:z`, `:yaw`, `:flying`, `:mode`.
+  """
   @impl Drone.Adapter
   def telemetry(%__MODULE__{} = state) do
     {:ok,
@@ -136,11 +215,36 @@ defmodule Drone.Adapters.Tello do
      }, state}
   end
 
+  @doc """
+  Closes the UDP socket.
+
+  ## Parameters
+
+    * `state` (`t:t/0`)
+
+  ## Returns
+
+  Always `:ok`.
+  """
   @impl Drone.Adapter
   def disconnect(%__MODULE__{socket: socket} = _state) do
     if socket, do: Connection.close(socket)
     :ok
   end
+
+  @doc """
+  Returns Tello-like capability metadata.
+
+  ## Parameters
+
+    * `state` (`t:t/0`) — unused beyond dispatch
+
+  ## Returns
+
+  `Drone.Adapter.Capabilities.tello_like/0`.
+  """
+  @impl Drone.Adapter
+  def capabilities(%__MODULE__{}), do: Capabilities.tello_like()
 
   defp update_state(%__MODULE__{} = state, %Command{type: :sdk_mode}) do
     %{state | mode: :sdk_mode}
