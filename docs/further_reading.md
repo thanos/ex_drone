@@ -29,6 +29,7 @@ background and next steps.
 | [Safety Pipeline](design/safety_pipeline.md) | Validation stages and policy model |
 | [Telemetry Events](design/telemetry_events.md) | Vehicle and swarm `:telemetry` events |
 | [v0.2.0 Deferred Work](design/v0_2_0_deferred.md) | Intentionally postponed swarm features |
+| [v0.3.0 Deferred Work](design/v0_3_0_deferred.md) | Intentionally postponed Crazyflie / adapter items |
 
 ### Research notes
 
@@ -148,11 +149,14 @@ In-repo: [Architecture](architecture.md), [Telemetry events](design/telemetry_ev
 
 ## Related platforms (roadmap context)
 
-These are not shipped adapters in v0.2.0; they are useful reading for later
-milestones and for classroom comparisons.
+Crazyflie single-drone support ships in v0.3.0. The links below remain useful
+for classroom comparisons and for adapters that are still on the roadmap
+(MAVLink, companion-computer hosting, …).
 
 - [Bitcraze Crazyflie docs](https://www.bitcraze.io/documentation/)
 - [MAVLink](https://mavlink.io/en/)
 - [ArduPilot](https://ardupilot.org/)
 - [PX4](https://docs.px4.io/)
 - [Nerves](https://nerves-project.org/)
+
+Deferred Crazyflie / adapter items: [v0.3.0 Deferred Work](design/v0_3_0_deferred.md).

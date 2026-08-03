@@ -73,6 +73,26 @@ Emergency commands always bypass the safety pipeline:
 Drone.emergency(drone)  # Always succeeds, stops motors immediately
 ```
 
+## Estimator and telemetry age (Crazyflie)
+
+Adapters that advertise positioning / estimator readiness can opt into extra
+gates via connect options:
+
+```elixir
+Drone.connect(:crazyflie,
+  name: :cf_safe,
+  uri: "mock://ready",
+  positioning: :flow,
+  safety: [
+    require_estimator: true,
+    max_telemetry_age_ms: 500
+  ]
+)
+```
+
+Missing estimator readiness or a missing/stale `telemetry_at` fails closed when
+these options are enabled. See the [Crazyflie guide](crazyflie.md).
+
 ## Dry-Run Mode
 
 Validate missions without flying:

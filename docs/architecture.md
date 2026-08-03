@@ -123,7 +123,8 @@ This allows swapping adapters without changing user code.
 
 - Simulator adapts the same API for testing
 - Tello adapter handles UDP communication
-- Future adapters (Crazyflie, MAVLink) will use the same contract
+- Crazyflie adapter speaks CRTP over Crazyradio (or `mock://`)
+- Future adapters (MAVLink, …) use the same contract
 - User code is adapter-agnostic
 
 ## Why Simulator-First?
@@ -133,8 +134,9 @@ This allows swapping adapters without changing user code.
 - Fast iteration cycle
 - Educational value
 - Mission replay and failure injection
+
 ## Further Reading
 
-- Guides: [Swarms](swarm.md), [Formations](formations.md), [Adapter Authoring](adapter_authoring.md)
-- Design: [Adapter Contract](design/adapter_contract.md), [Safety Pipeline](design/safety_pipeline.md), [Telemetry Events](design/telemetry_events.md)
+- Guides: [Crazyflie](crazyflie.md), [Swarms](swarm.md), [Formations](formations.md), [Adapter Authoring](adapter_authoring.md)
+- Design: [Adapter Contract](design/adapter_contract.md), [Safety Pipeline](design/safety_pipeline.md), [Telemetry Events](design/telemetry_events.md), [v0.3.0 Deferred](design/v0_3_0_deferred.md)
 - OTP and telemetry background: [Further Reading](further_reading.md#beam-otp-and-telemetry)

@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3.0 (2026-08-02)
+## v0.3.0 (2026-08-03)
 
 ### Added
 
@@ -36,7 +36,8 @@
   `Drone.Adapters.Crazyflie.USB`. Connect downloads the logging TOC and
   subscribes to `pm.batteryLevel` / `sys.canfly` for readiness. Optional
   `?safelink=1` negotiates Bitcraze SafeLink. BLE, raw attitude, trajectories,
-  parameter editing, and Crazyflie swarms remain deferred.
+  parameter editing, and Crazyflie swarms remain deferred — see
+  `docs/design/v0_3_0_deferred.md`.
 
 ## v0.2.0 (2026-07-31)
 

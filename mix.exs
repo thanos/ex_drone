@@ -16,7 +16,7 @@ defmodule Drone.MixProject do
       ],
       source_url: "https://github.com/thanos/ex_drone",
       package: package(),
-      description: "BEAM-native drone control for Elixir and Erlang.",
+      description: "BEAM-native drone control for Elixir and Erlang (Tello, Crazyflie, swarms).",
       aliases: [
         verify: &verify/1
       ]
@@ -63,6 +63,7 @@ defmodule Drone.MixProject do
         "docs/design/safety_pipeline.md": [title: "Safety Pipeline"],
         "docs/design/telemetry_events.md": [title: "Telemetry Events"],
         "docs/design/v0_2_0_deferred.md": [title: "v0.2.0 Deferred Work"],
+        "docs/design/v0_3_0_deferred.md": [title: "v0.3.0 Deferred Work"],
         "docs/research/tello_sdk.md": [title: "Tello SDK"],
         "docs/research/beam_udp.md": [title: "BEAM UDP"],
         "docs/research/safety_model.md": [title: "Safety Model"],
@@ -86,7 +87,8 @@ defmodule Drone.MixProject do
           "docs/design/adapter_contract.md",
           "docs/design/safety_pipeline.md",
           "docs/design/telemetry_events.md",
-          "docs/design/v0_2_0_deferred.md"
+          "docs/design/v0_2_0_deferred.md",
+          "docs/design/v0_3_0_deferred.md"
         ],
         Research: [
           "docs/research/tello_sdk.md",

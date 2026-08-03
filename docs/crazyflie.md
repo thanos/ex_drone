@@ -181,5 +181,6 @@ commander (`TAKEOFF_2`, `LAND_2`, `GO_TO_2`).
 
 ## Further Reading
 
+- Deferred scope: [v0.3.0 Deferred Work](design/v0_3_0_deferred.md)
 - Research-style refs: [Further Reading — Platforms](further_reading.md#platforms-and-adapters)
-- Official: [CRTP](https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/functional-areas/crtp/), [Crazyradio USB](https://www.bitcraze.io/documentation/repository/crazyradio-firmware/master/functional-areas/usb_radio_protocol/)
+- Official: [CRTP](https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/functional-areas/crtp/), [Crazyradio USB](https://www.bitcraze.io/documentation/repository/crazyradio-firmware/master/functional-areas/usb_radio_protocol/), [Logging](https://www.bitcraze.io/documentation/repository/crazyflie-firmware/master/functional-areas/crtp/crtp_log/)
