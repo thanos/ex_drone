@@ -182,7 +182,7 @@ defmodule Drone.Adapters.Crazyflie.USB do
 
     * `device` (`t:device/0`) — open handle
     * `endpoint` (`integer()`) — bulk OUT endpoint address (`0x01` for Crazyradio)
-    * `data` (`binary()`) — framed CRTP bytes (optionally SafeLink-prefixed)
+    * `data` (`binary()`) — framed CRTP bytes (SafeLink may rewrite header bits)
     * `timeout` (`pos_integer()`) — timeout in milliseconds
 
   ## Returns
@@ -239,16 +239,17 @@ defmodule Drone.Adapters.Crazyflie.USB do
 
   ## Returns
 
-  Always `:ok`.
+    * `:ok` — released
+    * `{:error, term()}` — close failed (stuck handle, driver error, …)
 
   ## Example implementation
 
       @impl Drone.Adapters.Crazyflie.USB
       def close(device) do
-        _ = LibUSB.release_interface(device, 0)
-        LibUSB.close(device)
-        :ok
+        with :ok <- LibUSB.release_interface(device, 0) do
+          LibUSB.close(device)
+        end
       end
   """
-  @callback close(device()) :: :ok
+  @callback close(device()) :: :ok | {:error, term()}
 end

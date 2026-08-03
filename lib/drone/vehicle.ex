@@ -37,6 +37,7 @@ defmodule Drone.Vehicle do
     flying: false,
     mode: :idle,
     estimator_ready: true,
+    takeoff_height_cm: 30,
     telemetry_at: nil,
     last_command: nil,
     command_history: []
@@ -318,14 +319,14 @@ defmodule Drone.Vehicle do
           duration = System.monotonic_time() - start_time
           Telemetry.emit_command_stop(adapter_key, state.name, cmd.type, :ok, duration)
 
-          new_vehicle_state =
-            state.vehicle_state
-            |> update_vehicle_state(cmd, reply)
-            |> maybe_sync_adapter_pose(state.adapter_module, new_adapter_state)
+          vehicle_state = update_vehicle_state(state.vehicle_state, cmd, reply)
+
+          {new_vehicle_state, synced_adapter_state} =
+            maybe_sync_adapter_pose(vehicle_state, state.adapter_module, new_adapter_state)
 
           new_state = %{
             state
-            | adapter_state: new_adapter_state,
+            | adapter_state: synced_adapter_state,
               vehicle_state: new_vehicle_state
           }
 
@@ -345,7 +346,9 @@ defmodule Drone.Vehicle do
     case adapter_module.connect(adapter_opts) do
       {:ok, adapter_state} ->
         safety_policy = build_policy(safety_opts)
-        initial_vehicle_state = fetch_initial_vehicle_state(adapter_module, adapter_state)
+
+        {initial_vehicle_state, adapter_state} =
+          fetch_initial_vehicle_state(adapter_module, adapter_state)
 
         state = %__MODULE__{
           name: name,
@@ -370,9 +373,12 @@ defmodule Drone.Vehicle do
   defp build_policy(opts) when is_list(opts), do: Policy.new(opts)
 
   defp fetch_initial_vehicle_state(adapter_module, adapter_state) do
+    caps = Adapter.capabilities(adapter_module, adapter_state)
+    takeoff_height = Map.get(caps, :takeoff_height_cm, 30)
+
     case adapter_module.telemetry(adapter_state) do
-      {:ok, telemetry, _} ->
-        %{
+      {:ok, telemetry, new_adapter_state} ->
+        vs = %{
           x: Map.get(telemetry, :x, 0),
           y: Map.get(telemetry, :y, 0),
           z: Map.get(telemetry, :z, 0),
@@ -382,13 +388,16 @@ defmodule Drone.Vehicle do
           flying: Map.get(telemetry, :flying, false),
           mode: Map.get(telemetry, :mode, :idle),
           estimator_ready: Map.get(telemetry, :estimator_ready, true),
+          takeoff_height_cm: Map.get(telemetry, :takeoff_height_cm, takeoff_height),
           telemetry_at: Map.get(telemetry, :telemetry_at),
           last_command: nil,
           command_history: []
         }
 
-      {:error, _, _} ->
-        @default_vehicle_state
+        {vs, new_adapter_state}
+
+      {:error, _, new_adapter_state} ->
+        {Map.put(@default_vehicle_state, :takeoff_height_cm, takeoff_height), new_adapter_state}
     end
   end
 
@@ -397,7 +406,8 @@ defmodule Drone.Vehicle do
   end
 
   defp update_vehicle_state(vehicle_state, %Command{type: :takeoff}, _reply) do
-    %{vehicle_state | z: 30, flying: true, mode: :flying, speed: 0}
+    height = Map.get(vehicle_state, :takeoff_height_cm, 30)
+    %{vehicle_state | z: height, flying: true, mode: :flying, speed: 0}
   end
 
   defp update_vehicle_state(vehicle_state, %Command{type: :land}, _reply) do
@@ -475,25 +485,35 @@ defmodule Drone.Vehicle do
   defp maybe_sync_adapter_pose(vehicle_state, adapter_module, adapter_state) do
     caps = Adapter.capabilities(adapter_module, adapter_state)
 
-    if Map.get(caps, :requires_estimator, false) do
+    if Map.get(caps, :pose_source) == :adapter or Map.get(caps, :requires_estimator, false) do
       case adapter_module.telemetry(adapter_state) do
-        {:ok, telem, _} ->
-          vehicle_state
-          |> Map.put(:x, Map.get(telem, :x, vehicle_state.x))
-          |> Map.put(:y, Map.get(telem, :y, vehicle_state.y))
-          |> Map.put(:z, Map.get(telem, :z, vehicle_state.z))
-          |> Map.put(:yaw, Map.get(telem, :yaw, vehicle_state.yaw))
-          |> Map.put(:battery, Map.get(telem, :battery, vehicle_state.battery))
-          |> Map.put(:estimator_ready, Map.get(telem, :estimator_ready, true))
-          |> Map.put(:telemetry_at, Map.get(telem, :telemetry_at))
+        {:ok, telem, new_adapter_state} ->
+          vs =
+            vehicle_state
+            |> Map.put(:x, Map.get(telem, :x, vehicle_state.x))
+            |> Map.put(:y, Map.get(telem, :y, vehicle_state.y))
+            |> Map.put(:z, Map.get(telem, :z, vehicle_state.z))
+            |> Map.put(:yaw, Map.get(telem, :yaw, vehicle_state.yaw))
+            |> maybe_put(:battery, Map.get(telem, :battery))
+            |> maybe_put(:estimator_ready, Map.get(telem, :estimator_ready))
+            |> Map.put(:telemetry_at, Map.get(telem, :telemetry_at))
+            |> Map.put(
+              :takeoff_height_cm,
+              Map.get(telem, :takeoff_height_cm, vehicle_state.takeoff_height_cm)
+            )
+
+          {vs, new_adapter_state}
 
         _ ->
-          vehicle_state
+          {vehicle_state, adapter_state}
       end
     else
-      vehicle_state
+      {vehicle_state, adapter_state}
     end
   end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp adapter_key_from_module(Drone.Adapters.Sim), do: :sim
   defp adapter_key_from_module(Drone.Adapters.Tello), do: :tello

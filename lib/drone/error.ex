@@ -54,6 +54,7 @@ defmodule Drone.Error do
           | :invalid_seconds
           | :stale_telemetry
           | :estimator_not_ready
+          | :telemetry_unavailable
 
   @typedoc """
   Adapter / link failure reasons commonly returned as `{:error, reason}`.
@@ -85,6 +86,7 @@ defmodule Drone.Error do
           | :simulated_failure
           | :unsupported_command
           | :estimator_not_ready
+          | :telemetry_unavailable
           | :link_lost
           | :usb_backend_unavailable
           | :no_ack

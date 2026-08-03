@@ -398,6 +398,27 @@ defmodule Drone do
   end
 
   @doc """
+  Returns capability metadata for the connected adapter.
+
+  ## Parameters
+
+    * `drone` (`t:drone/0`)
+
+  ## Returns
+
+  `Drone.Adapter.Capabilities.t()` map.
+
+  ## Example
+
+      caps = Drone.capabilities(:my_drone)
+      caps.sdk_mode
+  """
+  @spec capabilities(drone()) :: Drone.Adapter.Capabilities.t()
+  def capabilities(drone) do
+    call(drone, :capabilities)
+  end
+
+  @doc """
   Disconnects from the drone and stops the vehicle process.
 
   ## Parameters

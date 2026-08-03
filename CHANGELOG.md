@@ -6,25 +6,37 @@
 
 - `Drone.Adapters.Crazyflie` for single-drone Crazyradio / mock high-level flight
 - CRTP encode/decode, high-level commander, supervisor, and platform packets
+- CRTP logging TOC/subscribe helpers (`Logging`) for battery + `sys.canfly`
+- Bitcraze SafeLink enable + header-bit framing (`SafeLink`)
 - Crazyradio transport with pluggable USB backend (`USB.Unavailable` by default)
 - In-process `Transport.Mock` profiles for CI (`mock://ready`, estimator/battery/unplug)
+- Optional `Transport.telemetry/1` so adapters do not inspect transport structs
 - Optional `Drone.Adapter.capabilities/1` and `Drone.Adapter.Capabilities`
+- `Drone.capabilities/1` public API
 - Mission preflight capability validation (`Mission.validate_capabilities/2`)
 - Safety options `:require_estimator` and `:max_telemetry_age_ms`
 - Guide: `docs/crazyflie.md`
 - Shared adapter acceptance tests for Sim and Crazyflie mock
+- Example: `examples/crazyflie_mock_flight.exs`
 
 ### Changed
 
-- `Drone.Adapter.resolve/1` recognizes `:crazyflie`
+- `Drone.Adapter.resolve/1` recognizes `:crazyflie` and rejects unloaded modules
 - Sim and Tello advertise Tello-like capabilities
+- Crazyflie pose uses `Drone.Geometry`; takeoff height feeds altitude safety
+- Crazyflie readiness gate applies to takeoff, land, move, and rotate
+- Radio URIs default `safelink=0`; `?safelink=1` enables SafeLink negotiation
+- Estimator / telemetry-age safety fail closed on missing values
+- `mix verify` mirrors CI (format, unused deps, credo, sobelow, dialyzer, tests, docs)
 - README roadmap: Crazyflie delivered in v0.3.0 (swarms already shipped in v0.2.0)
 
 ### Notes
 
 - Real `radio://` links require a user-supplied `usb_backend` implementing
-  `Drone.Adapters.Crazyflie.USB`. BLE, raw attitude, trajectories, and Crazyflie
-  swarms remain deferred.
+  `Drone.Adapters.Crazyflie.USB`. Connect downloads the logging TOC and
+  subscribes to `pm.batteryLevel` / `sys.canfly` for readiness. Optional
+  `?safelink=1` negotiates Bitcraze SafeLink. BLE, raw attitude, trajectories,
+  parameter editing, and Crazyflie swarms remain deferred.
 
 ## v0.2.0 (2026-07-31)
 

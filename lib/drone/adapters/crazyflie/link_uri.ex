@@ -30,7 +30,7 @@ defmodule Drone.Adapters.Crazyflie.LinkURI do
   | `:datarate` | `:rate_250k` \\| `:rate_1m` \\| `:rate_2m` \\| `nil` | Radio data rate |
   | `:address` | `binary()` \\| `nil` | 5-byte radio address (default `E7E7E7E7E7`) |
   | `:mock_profile` | `atom()` \\| `nil` | Mock profile (`:ready`, `:low_battery`, …) |
-  | `:safelink` | `boolean()` | Whether SafeLink framing is enabled (default `true`) |
+  | `:safelink` | `boolean()` | SafeLink framing (default `false`; enable with `?safelink=1`) |
   | `:timeout_ms` | `pos_integer()` | USB/IO timeout in milliseconds (default `1000`) |
 
   ## Examples
@@ -42,7 +42,7 @@ defmodule Drone.Adapters.Crazyflie.LinkURI do
         datarate: :rate_2m,
         address: <<0xE7, 0xE7, 0xE7, 0xE7, 0xE7>>,
         mock_profile: nil,
-        safelink: true,
+        safelink: false,
         timeout_ms: 1000
       }
 
@@ -53,7 +53,7 @@ defmodule Drone.Adapters.Crazyflie.LinkURI do
         channel: nil,
         datarate: nil,
         address: nil,
-        safelink: true,
+        safelink: false,
         timeout_ms: 500
       }
   """
@@ -127,27 +127,23 @@ defmodule Drone.Adapters.Crazyflie.LinkURI do
   end
 
   defp parse_path(:mock, path) do
-    profile =
-      case String.trim(path) do
-        "" -> :default
-        "default" -> :default
-        "ready" -> :ready
-        "estimator_not_ready" -> :estimator_not_ready
-        "low_battery" -> :low_battery
-        other -> String.to_atom(other)
-      end
+    case mock_profile(String.trim(path)) do
+      {:ok, profile} ->
+        {:ok,
+         %{
+           scheme: :mock,
+           radio_index: nil,
+           channel: nil,
+           datarate: nil,
+           address: nil,
+           mock_profile: profile,
+           safelink: false,
+           timeout_ms: 1000
+         }}
 
-    {:ok,
-     %{
-       scheme: :mock,
-       radio_index: nil,
-       channel: nil,
-       datarate: nil,
-       address: nil,
-       mock_profile: profile,
-       safelink: true,
-       timeout_ms: 1000
-     }}
+      {:error, _} = err ->
+        err
+    end
   end
 
   defp parse_path(:radio, path) do
@@ -165,11 +161,20 @@ defmodule Drone.Adapters.Crazyflie.LinkURI do
          datarate: datarate,
          address: address,
          mock_profile: nil,
-         safelink: true,
+         # SafeLink defaults off; `?safelink=1` negotiates Bitcraze SafeLink on open.
+         safelink: false,
          timeout_ms: 1000
        }}
     end
   end
+
+  defp mock_profile(""), do: {:ok, :default}
+  defp mock_profile("default"), do: {:ok, :default}
+  defp mock_profile("ready"), do: {:ok, :ready}
+  defp mock_profile("estimator_not_ready"), do: {:ok, :estimator_not_ready}
+  defp mock_profile("low_battery"), do: {:ok, :low_battery}
+  defp mock_profile("unplug"), do: {:ok, :unplug}
+  defp mock_profile(_), do: {:error, :unknown_mock_profile}
 
   defp take_index([index | rest]) do
     case Integer.parse(index) do
@@ -221,6 +226,7 @@ defmodule Drone.Adapters.Crazyflie.LinkURI do
       |> Enum.reduce_while(%{}, fn {k, v}, acc ->
         case normalize_opt(k, v) do
           {:ok, key, value} -> {:cont, Map.put(acc, key, value)}
+          :skip -> {:cont, acc}
           {:error, _} = err -> {:halt, err}
         end
       end)
@@ -242,5 +248,5 @@ defmodule Drone.Adapters.Crazyflie.LinkURI do
     end
   end
 
-  defp normalize_opt(_, _), do: {:ok, :ignored, nil}
+  defp normalize_opt(_, _), do: :skip
 end

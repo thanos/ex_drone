@@ -249,9 +249,8 @@ defmodule Drone.Adapter do
 
   ## Returns
 
-    * `{:ok, module()}` — resolved module
-    * `{:error, :unknown_adapter}` — reserved for future use; bare atoms that
-      are not built-in keys are currently treated as modules
+    * `{:ok, module()}` — resolved module that exports `connect/1`
+    * `{:error, :unknown_adapter}` — unknown built-in key or unloaded module
 
   ## Examples
 
@@ -264,7 +263,15 @@ defmodule Drone.Adapter do
   def resolve(:sim), do: {:ok, Drone.Adapters.Sim}
   def resolve(:tello), do: {:ok, Drone.Adapters.Tello}
   def resolve(:crazyflie), do: {:ok, Drone.Adapters.Crazyflie}
-  def resolve(module) when is_atom(module), do: {:ok, module}
+
+  def resolve(module) when is_atom(module) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :connect, 1) do
+      {:ok, module}
+    else
+      {:error, :unknown_adapter}
+    end
+  end
+
   def resolve(_), do: {:error, :unknown_adapter}
 
   @doc """
@@ -278,14 +285,11 @@ defmodule Drone.Adapter do
   ## Returns
 
   `Drone.Adapter.Capabilities.t()`.
-
-  ## Examples
-
-      caps = Drone.Adapter.capabilities(Drone.Adapters.Sim, sim_state)
-      :required = caps.sdk_mode
   """
   @spec capabilities(module(), state()) :: Capabilities.t()
   def capabilities(module, state) when is_atom(module) do
+    _ = Code.ensure_loaded(module)
+
     if function_exported?(module, :capabilities, 1) do
       module.capabilities(state)
     else

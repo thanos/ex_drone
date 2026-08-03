@@ -57,7 +57,9 @@ defmodule Drone.Adapters.Crazyflie do
     Units
   }
 
-  alias Drone.Command
+  alias Drone.{Command, Geometry}
+
+  @supported_positioning [:flow, :lighthouse, :loco]
 
   @typedoc """
   Crazyflie adapter state held by `Drone.Vehicle`.
@@ -114,11 +116,12 @@ defmodule Drone.Adapters.Crazyflie do
           y: integer(),
           z: integer(),
           yaw: integer(),
-          battery: integer(),
-          estimator_ready: boolean(),
-          link_quality: integer(),
+          battery: integer() | nil,
+          estimator_ready: boolean() | nil,
+          link_quality: integer() | nil,
           telemetry_at: integer() | nil,
-          firmware: String.t(),
+          firmware: String.t() | nil,
+          serial_number: String.t() | nil,
           last_error: term() | nil
         }
 
@@ -138,11 +141,13 @@ defmodule Drone.Adapters.Crazyflie do
     y: 0,
     z: 0,
     yaw: 0,
-    battery: 100,
-    estimator_ready: true,
-    link_quality: 100,
+    # nil until transport.telemetry/1 reports a value (fail closed on radio).
+    battery: nil,
+    estimator_ready: nil,
+    link_quality: nil,
     telemetry_at: nil,
-    firmware: "mock",
+    firmware: nil,
+    serial_number: nil,
     last_error: nil
   ]
 
@@ -150,28 +155,8 @@ defmodule Drone.Adapters.Crazyflie do
   Opens a Crazyflie link and returns initial adapter state.
 
   Resolves a transport via `Transport.resolve/1`, runs the CRTP handshake
-  through `Session.connect/2`, and seeds telemetry (including mock profile
-  values when using the mock transport).
-
-  ## Parameters
-
-    * `opts` (`keyword()`) — see Connection options in the moduledoc
-
-  ## Returns
-
-    * `{:ok, t()}` — connected adapter state
-    * `{:error, term()}` — URI, USB, or handshake failure
-
-  ## Examples
-
-      {:ok, state} =
-        Drone.Adapters.Crazyflie.connect(
-          uri: "mock://ready",
-          positioning: :flow,
-          default_height_cm: 40
-        )
-
-      true = state.estimator_ready
+  through `Session.connect/2`, and seeds telemetry via optional
+  `c:Transport.telemetry/1`.
   """
   @impl true
   def connect(opts) do
@@ -180,7 +165,9 @@ defmodule Drone.Adapters.Crazyflie do
     default_height_cm = Keyword.get(opts, :default_height_cm, 50)
     default_speed = Keyword.get(opts, :default_speed_cm_s, 50)
 
-    with {:ok, transport_mod} <- Transport.resolve(opts),
+    with :ok <- validate_positioning(positioning),
+         :ok <- validate_height(default_height_cm),
+         {:ok, transport_mod} <- Transport.resolve(opts),
          {:ok, session} <- Session.connect(transport_mod, Keyword.put(opts, :uri, uri)) do
       state = %__MODULE__{
         session: session,
@@ -190,11 +177,15 @@ defmodule Drone.Adapters.Crazyflie do
         default_speed_cm_s: default_speed,
         move_speed_cm_s: default_speed,
         protocol_version: session.protocol_version,
-        capabilities: Capabilities.crazyflie(positioning: positioning),
+        capabilities:
+          Capabilities.crazyflie(
+            positioning: positioning,
+            takeoff_height_cm: default_height_cm
+          ),
         telemetry_at: System.monotonic_time(:millisecond)
       }
 
-      {:ok, sync_mock_telemetry(state)}
+      {:ok, sync_transport_telemetry(state)}
     end
   end
 
@@ -256,30 +247,33 @@ defmodule Drone.Adapters.Crazyflie do
   end
 
   def command(%__MODULE__{} = state, %Command{type: :takeoff}) do
-    with :ok <- readiness_gate(state),
-         {:ok, state} <- send_packet(state, SupervisorCmd.arm()),
-         height_m <- Units.cm_to_m(state.default_height_cm),
-         duration <- max(height_m / 0.5, 1.0),
-         {:ok, state} <- send_packet(state, Commander.takeoff_2(height_m, duration)) do
-      {:ok, :ok,
-       %{
-         state
-         | flying: true,
-           armed: true,
-           mode: :flying,
-           z: state.default_height_cm,
-           telemetry_at: now()
-       }}
-    else
-      {:error, reason, state} -> {:error, reason, state}
-      {:error, reason} -> {:error, reason, state}
+    with {:ok, state} <- readiness_gate(state),
+         {:ok, armed_state} <- send_packet(state, SupervisorCmd.arm()),
+         height_m <- Units.cm_to_m(armed_state.default_height_cm),
+         duration <- max(height_m / 0.5, 1.0) do
+      case send_packet(armed_state, Commander.takeoff_2(height_m, duration)) do
+        {:ok, state} ->
+          {:ok, :ok,
+           %{
+             state
+             | flying: true,
+               armed: true,
+               mode: :flying,
+               z: state.default_height_cm,
+               telemetry_at: now()
+           }}
+
+        {:error, reason, state} ->
+          state = best_effort_disarm(state)
+          {:error, reason, state}
+      end
     end
   end
 
   def command(%__MODULE__{} = state, %Command{type: :land}) do
-    duration = max(Units.cm_to_m(state.z) / 0.5, 1.0)
-
-    with {:ok, state} <- send_packet(state, Commander.land_2(0.0, duration)),
+    with {:ok, state} <- readiness_gate(state),
+         duration <- max(Units.cm_to_m(max(state.z, 1)) / 0.5, 1.0),
+         {:ok, state} <- send_packet(state, Commander.land_2(0.0, duration)),
          {:ok, state} <- send_packet(state, SupervisorCmd.disarm()) do
       {:ok, :ok,
        %{state | flying: false, armed: false, mode: :sdk_mode, z: 0, telemetry_at: now()}}
@@ -293,59 +287,63 @@ defmodule Drone.Adapters.Crazyflie do
          %{state | flying: false, armed: false, mode: :emergency, z: 0, telemetry_at: now()}}
 
       {:error, reason, state} ->
-        # Emergency must still surface link loss rather than fake a land.
-        {:error, reason, %{state | last_error: reason, mode: :emergency, flying: false}}
+        # Do not claim the vehicle landed when the packet was not acknowledged.
+        {:error, reason, %{state | last_error: reason, mode: :emergency}}
     end
   end
 
   def command(%__MODULE__{} = state, %Command{type: :move, args: args}) do
-    direction = Keyword.fetch!(args, :direction)
-    distance = Keyword.fetch!(args, :distance)
-    {dx_cm, dy_cm, dz_cm} = move_delta_cm(direction, distance)
-    duration = Units.move_duration_s(distance, state.move_speed_cm_s)
+    with {:ok, state} <- readiness_gate(state) do
+      direction = Keyword.fetch!(args, :direction)
+      distance = Keyword.fetch!(args, :distance)
+      {dx_cm, dy_cm, dz_cm} = Geometry.move_delta(direction, distance, state.yaw)
+      duration = Units.move_duration_s(distance, state.move_speed_cm_s)
 
-    packet =
-      Commander.go_to_2(
-        Units.cm_to_m(dx_cm),
-        Units.cm_to_m(dy_cm),
-        Units.cm_to_m(dz_cm),
-        0.0,
-        duration,
-        relative: true
-      )
+      packet =
+        Commander.go_to_2(
+          Units.cm_to_m(dx_cm),
+          Units.cm_to_m(dy_cm),
+          Units.cm_to_m(dz_cm),
+          0.0,
+          duration,
+          relative: true
+        )
 
-    case send_packet(state, packet) do
-      {:ok, state} ->
-        {:ok, :ok,
-         %{
-           state
-           | x: state.x + dx_cm,
-             y: state.y + dy_cm,
-             z: max(0, state.z + dz_cm),
-             telemetry_at: now()
-         }}
+      case send_packet(state, packet) do
+        {:ok, state} ->
+          {:ok, :ok,
+           %{
+             state
+             | x: state.x + dx_cm,
+               y: state.y + dy_cm,
+               z: max(0, state.z + dz_cm),
+               telemetry_at: now()
+           }}
 
-      other ->
-        other
+        other ->
+          other
+      end
     end
   end
 
   def command(%__MODULE__{} = state, %Command{type: :rotate, args: args}) do
-    direction = Keyword.fetch!(args, :direction)
-    degrees = Keyword.fetch!(args, :degrees)
-    signed = if direction == :cw, do: degrees, else: -degrees
-    yaw_rad = Units.deg_to_rad(signed)
-    duration = max(abs(degrees) / 90.0, 0.5)
+    with {:ok, state} <- readiness_gate(state) do
+      direction = Keyword.fetch!(args, :direction)
+      degrees = Keyword.fetch!(args, :degrees)
+      signed = if direction == :cw, do: degrees, else: -degrees
+      yaw_rad = Units.deg_to_rad(signed)
+      duration = max(abs(degrees) / 90.0, 0.5)
 
-    packet = Commander.go_to_2(0.0, 0.0, 0.0, yaw_rad, duration, relative: true)
+      packet = Commander.go_to_2(0.0, 0.0, 0.0, yaw_rad, duration, relative: true)
 
-    case send_packet(state, packet) do
-      {:ok, state} ->
-        new_yaw = rem(state.yaw + signed + 360, 360)
-        {:ok, :ok, %{state | yaw: new_yaw, telemetry_at: now()}}
+      case send_packet(state, packet) do
+        {:ok, state} ->
+          new_yaw = Geometry.rotate_yaw(direction, state.yaw, degrees)
+          {:ok, :ok, %{state | yaw: new_yaw, telemetry_at: now()}}
 
-      other ->
-        other
+        other ->
+          other
+      end
     end
   end
 
@@ -356,8 +354,15 @@ defmodule Drone.Adapters.Crazyflie do
     end
   end
 
-  def command(%__MODULE__{} = state, %Command{type: :hover}) do
-    {:ok, :ok, %{state | telemetry_at: now()}}
+  def command(%__MODULE__{} = state, %Command{type: :hover, args: args}) do
+    seconds = Keyword.get(args, :seconds, 1) * 1.0
+
+    packet = Commander.go_to_2(0.0, 0.0, 0.0, 0.0, seconds, relative: true)
+
+    case send_packet(state, packet) do
+      {:ok, state} -> {:ok, :ok, %{state | telemetry_at: now()}}
+      other -> other
+    end
   end
 
   def command(%__MODULE__{} = state, %Command{type: :speed, args: args}) do
@@ -370,13 +375,34 @@ defmodule Drone.Adapters.Crazyflie do
   end
 
   def command(%__MODULE__{} = state, %Command{type: :query, args: args}) do
+    state = sync_transport_telemetry(state)
+
     case Keyword.fetch!(args, :type) do
-      :battery -> {:ok, state.battery, touch(state)}
-      :height -> {:ok, state.z, touch(state)}
-      :sdk_version -> {:ok, state.protocol_version, touch(state)}
-      :serial_number -> {:ok, "mock-cf", touch(state)}
-      :speed -> {:ok, state.move_speed_cm_s, touch(state)}
-      other -> {:error, {:unsupported_query, other}, state}
+      :battery ->
+        if is_integer(state.battery) do
+          {:ok, state.battery, touch(state)}
+        else
+          {:error, :telemetry_unavailable, state}
+        end
+
+      :height ->
+        {:ok, state.z, touch(state)}
+
+      :sdk_version ->
+        {:ok, state.protocol_version, touch(state)}
+
+      :serial_number ->
+        if is_binary(state.serial_number) do
+          {:ok, state.serial_number, touch(state)}
+        else
+          {:error, :telemetry_unavailable, state}
+        end
+
+      :speed ->
+        {:ok, state.move_speed_cm_s, touch(state)}
+
+      other ->
+        {:error, {:unsupported_query, other}, state}
     end
   end
 
@@ -385,27 +411,13 @@ defmodule Drone.Adapters.Crazyflie do
   @doc """
   Returns a telemetry snapshot for the vehicle safety / state machine.
 
-  When the session uses the mock transport, fields are synced from mock
-  kinematics (meters/radians → cm/degrees).
-
-  ## Parameters
-
-    * `state` (`t:t/0`) — current adapter state
-
-  ## Returns
-
-    * `{:ok, map(), t()}` — map includes `:x`, `:y`, `:z`, `:yaw`, `:battery`,
-      `:flying`, `:mode`, `:estimator_ready`, `:link_quality`, `:positioning`,
-      `:protocol_version`, `:firmware`, `:telemetry_at`
-
-  ## Examples
-
-      {:ok, telem, state} = Drone.Adapters.Crazyflie.telemetry(state)
-      true = is_integer(telem.battery)
+  Transport-reported readiness fields are synced via optional
+  `c:Transport.telemetry/1`. Pose (`x`/`y`/`z`/`yaw`) is maintained by the
+  adapter from commanded moves.
   """
   @impl true
   def telemetry(%__MODULE__{} = state) do
-    state = sync_mock_telemetry(state)
+    state = sync_transport_telemetry(state)
 
     {:ok,
      %{
@@ -421,6 +433,7 @@ defmodule Drone.Adapters.Crazyflie do
        positioning: state.positioning,
        protocol_version: state.protocol_version,
        firmware: state.firmware,
+       takeoff_height_cm: state.default_height_cm,
        telemetry_at: state.telemetry_at || now()
      }, state}
   end
@@ -447,11 +460,23 @@ defmodule Drone.Adapters.Crazyflie do
   end
 
   defp readiness_gate(%__MODULE__{} = state) do
+    state = sync_transport_telemetry(state)
+
     cond do
-      state.battery < 15 -> {:error, :low_battery}
-      not state.estimator_ready -> {:error, :estimator_not_ready}
-      is_nil(state.telemetry_at) -> {:error, :stale_telemetry}
-      true -> :ok
+      is_nil(state.battery) or is_nil(state.estimator_ready) ->
+        {:error, :telemetry_unavailable, state}
+
+      state.battery < 15 ->
+        {:error, :low_battery, state}
+
+      state.estimator_ready != true ->
+        {:error, :estimator_not_ready, state}
+
+      is_nil(state.telemetry_at) ->
+        {:error, :stale_telemetry, state}
+
+      true ->
+        {:ok, state}
     end
   end
 
@@ -465,30 +490,59 @@ defmodule Drone.Adapters.Crazyflie do
     end
   end
 
-  defp sync_mock_telemetry(%__MODULE__{session: %{transport_state: ts}} = state)
-       when is_struct(ts, Drone.Adapters.Crazyflie.Transport.Mock) do
-    %{
-      state
-      | battery: ts.battery_percent,
-        estimator_ready: ts.estimator_ready,
-        x: Units.m_to_cm(ts.x),
-        y: Units.m_to_cm(ts.y),
-        z: Units.m_to_cm(ts.z),
-        yaw: Units.rad_to_deg(ts.yaw),
-        flying: ts.flying,
-        armed: ts.armed,
-        telemetry_at: now()
-    }
+  defp best_effort_disarm(state) do
+    case send_packet(state, SupervisorCmd.disarm()) do
+      {:ok, state} ->
+        %{state | armed: false}
+
+      {:error, _reason, state} ->
+        %{state | armed: false, last_error: :disarm_after_failed_takeoff}
+    end
   end
 
-  defp sync_mock_telemetry(state), do: state
+  defp sync_transport_telemetry(%__MODULE__{session: session} = state) do
+    mod = session.transport_module
+    _ = Code.ensure_loaded(mod)
 
-  defp move_delta_cm(:forward, d), do: {0, d, 0}
-  defp move_delta_cm(:back, d), do: {0, -d, 0}
-  defp move_delta_cm(:left, d), do: {-d, 0, 0}
-  defp move_delta_cm(:right, d), do: {d, 0, 0}
-  defp move_delta_cm(:up, d), do: {0, 0, d}
-  defp move_delta_cm(:down, d), do: {0, 0, -d}
+    if function_exported?(mod, :telemetry, 1) do
+      case mod.telemetry(session.transport_state) do
+        {:ok, telem, new_ts} when is_map(telem) ->
+          state = %{state | session: %{session | transport_state: new_ts}}
+          apply_transport_telem(state, telem)
+
+        _ ->
+          state
+      end
+    else
+      state
+    end
+  end
+
+  defp apply_transport_telem(state, telem) do
+    state
+    |> put_if_present(telem, :battery)
+    |> put_if_present(telem, :estimator_ready)
+    |> put_if_present(telem, :flying)
+    |> put_if_present(telem, :armed)
+    |> put_if_present(telem, :firmware)
+    |> put_if_present(telem, :serial_number)
+    |> put_if_present(telem, :link_quality)
+    |> Map.put(:telemetry_at, now())
+  end
+
+  defp put_if_present(state, telem, key) do
+    if Map.has_key?(telem, key) do
+      Map.put(state, key, Map.get(telem, key))
+    else
+      state
+    end
+  end
+
+  defp validate_positioning(pos) when pos in @supported_positioning, do: :ok
+  defp validate_positioning(other), do: {:error, {:unsupported_positioning, other}}
+
+  defp validate_height(h) when is_integer(h) and h > 0, do: :ok
+  defp validate_height(other), do: {:error, {:invalid_default_height_cm, other}}
 
   defp touch(state), do: %{state | telemetry_at: now()}
   defp now, do: System.monotonic_time(:millisecond)

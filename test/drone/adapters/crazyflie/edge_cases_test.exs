@@ -1,4 +1,4 @@
-defmodule Drone.Adapters.Crazyflie.ExtraCoverageTest do
+defmodule Drone.Adapters.Crazyflie.EdgeCasesTest do
   use ExUnit.Case, async: false
 
   alias Drone.Adapter.Capabilities
@@ -67,7 +67,7 @@ defmodule Drone.Adapters.Crazyflie.ExtraCoverageTest do
     assert {:ok, :ok, state} = Crazyflie.command(state, Command.move(:down, 20))
     assert {:ok, :ok, state} = Crazyflie.command(state, Command.rotate(:ccw, 45))
     assert {:ok, :ok, state} = Crazyflie.command(state, Command.stop())
-    assert {:ok, :ok, state} = Crazyflie.command(state, Command.hover(seconds: 1))
+    assert {:ok, :ok, state} = Crazyflie.command(state, Command.hover(1))
     assert {:ok, :ok, state} = Crazyflie.command(state, Command.speed(40))
     assert {:ok, 40, state} = Crazyflie.command(state, Command.query(:speed))
     assert {:ok, _, state} = Crazyflie.command(state, Command.query(:height))
@@ -82,12 +82,16 @@ defmodule Drone.Adapters.Crazyflie.ExtraCoverageTest do
     assert :ok = Crazyflie.disconnect(state)
   end
 
-  test "emergency surfaces link loss from unplugged mock" do
+  test "emergency surfaces link loss from unplugged mock without claiming land" do
     {:ok, state} = Crazyflie.connect(uri: "mock://ready")
+    assert {:ok, :ok, state} = Crazyflie.command(state, Command.sdk_mode())
+    assert {:ok, :ok, state} = Crazyflie.command(state, Command.takeoff())
+    assert state.flying
     ts = Mock.force_unplug(state.session.transport_state)
     state = put_in(state.session.transport_state, ts)
     assert {:error, :link_lost, state} = Crazyflie.command(state, Command.emergency())
     assert state.mode == :emergency
+    assert state.flying
     assert state.last_error == :link_lost
   end
 
@@ -100,15 +104,48 @@ defmodule Drone.Adapters.Crazyflie.ExtraCoverageTest do
     assert {:error, :link_lost, _} = Crazyflie.command(state, Command.move(:forward, 20))
   end
 
-  test "readiness rejects nil telemetry_at" do
+  test "readiness gate rejects move and land when estimator is not ready" do
+    {:ok, state} = Crazyflie.connect(uri: "mock://estimator_not_ready")
+
+    assert {:error, :estimator_not_ready, _} =
+             Crazyflie.command(state, Command.move(:forward, 20))
+
+    assert {:error, :estimator_not_ready, _} = Crazyflie.command(state, Command.land())
+    assert {:error, :estimator_not_ready, _} = Crazyflie.command(state, Command.rotate(:cw, 10))
+  end
+
+  test "readiness rejects when adapter has no telemetry timestamp and transport lacks telemetry/1" do
     {:ok, state} = Crazyflie.connect(uri: "mock://ready")
-    state = %{state | telemetry_at: nil, estimator_ready: true, battery: 100}
-    assert {:error, :stale_telemetry, _} = Crazyflie.command(state, Command.takeoff())
+    # Transport.Mock always refreshes via telemetry/1; clear battery after sync path
+    # by forcing nil fields that sync cannot fill when keys are absent.
+    state = %{state | battery: nil, estimator_ready: nil, telemetry_at: nil}
+
+    ts = %{state.session.transport_state | battery_percent: nil, estimator_ready: nil}
+    state = put_in(state.session.transport_state, ts)
+
+    assert {:error, :telemetry_unavailable, _} = Crazyflie.command(state, Command.takeoff())
   end
 
   test "mock transport opens from unparseable uri defaults profile" do
     {:ok, state} = Mock.open(uri: "not-a-uri")
     assert state.profile == :default
+  end
+
+  test "rejects unsupported positioning and unknown mock profiles" do
+    assert {:error, {:unsupported_positioning, :banana}} =
+             Crazyflie.connect(uri: "mock://ready", positioning: :banana)
+
+    assert {:error, :unknown_mock_profile} = Crazyflie.connect(uri: "mock://nope")
+  end
+
+  test "yaw accumulates across relative rotates" do
+    {:ok, state} = Crazyflie.connect(uri: "mock://ready")
+    assert {:ok, :ok, state} = Crazyflie.command(state, Command.sdk_mode())
+    assert {:ok, :ok, state} = Crazyflie.command(state, Command.takeoff())
+    assert {:ok, :ok, state} = Crazyflie.command(state, Command.rotate(:cw, 90))
+    assert {:ok, :ok, state} = Crazyflie.command(state, Command.rotate(:cw, 90))
+    assert {:ok, telem, _} = Crazyflie.telemetry(state)
+    assert telem.yaw == 180
   end
 
   test "mock transport unknown supervisor/commander payloads" do

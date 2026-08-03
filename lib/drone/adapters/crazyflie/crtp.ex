@@ -196,7 +196,7 @@ defmodule Drone.Adapters.Crazyflie.CRTP do
       false = Drone.Adapters.Crazyflie.CRTP.null?(%{port: 8, channel: 0, payload: <<>>})
   """
   @spec null?(packet()) :: boolean()
-  def null?(%{port: @null_port, channel: @null_channel}), do: true
+  def null?(%{port: @null_port, channel: @null_channel, payload: <<>>}), do: true
   def null?(_), do: false
 
   @doc """

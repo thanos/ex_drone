@@ -121,7 +121,7 @@ defmodule Drone.MixProject do
   defp package do
     [
       name: "ex_drone",
-      files: ~w(lib docs .formatter.exs mix.exs README.md CHANGELOG.md LICENSE),
+      files: ~w(lib docs examples .formatter.exs mix.exs README.md CHANGELOG.md LICENSE),
       licenses: ["MIT"],
       maintainers: ["Thanos Vassilakis"],
       links: %{
@@ -133,10 +133,13 @@ defmodule Drone.MixProject do
   end
 
   defp verify(_) do
+    # Mirrors CI jobs in .github/workflows/ci.yml (lint + test + security + dialyzer + docs).
     steps = [
       {"compile --warnings-as-errors", :dev},
       {"format --check-formatted", :dev},
+      {"deps.unlock --check-unused", :dev},
       {"credo --strict", :dev},
+      {"sobelow --skip --exit low", :dev},
       {"dialyzer", :dev},
       {"test --cover", :test},
       {"docs --warnings-as-errors", :dev}

@@ -17,9 +17,7 @@ defmodule Drone.Adapter.Capabilities do
   @typedoc """
   Capability map advertised by an adapter.
 
-  All keys are optional so adapters can publish only what they know. Extra
-  adapter-specific atoms (for example `:requires_estimator`, `:link`) are
-  allowed via `atom() => term()`.
+  All keys are optional so adapters can publish only what they know.
 
   | Key | Possible values | Meaning |
   | --- | --- | --- |
@@ -29,7 +27,9 @@ defmodule Drone.Adapter.Capabilities do
   | `:positioning` | `atom()` \\| `nil` | Positioning model (`:dead_reckoning`, `:flow`, `:lighthouse`, `:loco`, …) |
   | `:units` | map | Canonical units for distance / angle / duration |
   | `:maneuver_completion` | `:immediate` \\| `:awaited` \\| `:fire_and_forget` | How move completion is observed |
-  | `:requires_estimator` | `boolean()` | Crazyflie: takeoff needs estimator ready |
+  | `:requires_estimator` | `boolean()` | Motion needs estimator ready |
+  | `:pose_source` | `:adapter` \\| `:dead_reckoning` | Who owns authoritative pose |
+  | `:takeoff_height_cm` | `pos_integer()` | Planned takeoff height for altitude safety |
   | `:link` | `atom()` | Physical link hint (`:crazyradio`, …) |
 
   `:units` map keys:
@@ -70,7 +70,10 @@ defmodule Drone.Adapter.Capabilities do
             optional(:duration) => :milliseconds | :seconds
           },
           optional(:maneuver_completion) => :immediate | :awaited | :fire_and_forget,
-          atom() => term()
+          optional(:requires_estimator) => boolean(),
+          optional(:pose_source) => :adapter | :dead_reckoning,
+          optional(:takeoff_height_cm) => pos_integer(),
+          optional(:link) => atom()
         }
 
   @default_commands [
@@ -122,7 +125,9 @@ defmodule Drone.Adapter.Capabilities do
       queries: @default_queries,
       positioning: :dead_reckoning,
       units: %{distance: :cm, angle: :degrees, duration: :seconds},
-      maneuver_completion: :awaited
+      maneuver_completion: :awaited,
+      pose_source: :dead_reckoning,
+      takeoff_height_cm: 30
     }
   end
 
@@ -154,6 +159,7 @@ defmodule Drone.Adapter.Capabilities do
   @spec crazyflie(keyword()) :: t()
   def crazyflie(opts \\ []) do
     positioning = Keyword.get(opts, :positioning, :flow)
+    takeoff_height_cm = Keyword.get(opts, :takeoff_height_cm, 50)
 
     %{
       sdk_mode: :optional,
@@ -165,14 +171,17 @@ defmodule Drone.Adapter.Capabilities do
         :move,
         :rotate,
         :hover,
+        :speed,
         :stop,
         :query
       ],
-      queries: [:battery, :height, :sdk_version, :serial_number],
+      queries: [:battery, :height, :speed, :sdk_version, :serial_number],
       positioning: positioning,
       units: %{distance: :cm, angle: :degrees, duration: :seconds},
       maneuver_completion: :fire_and_forget,
       requires_estimator: true,
+      pose_source: :adapter,
+      takeoff_height_cm: takeoff_height_cm,
       link: :crazyradio
     }
   end

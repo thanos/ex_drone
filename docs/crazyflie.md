@@ -11,12 +11,14 @@ Crazyradio (or an in-process mock transport for CI and dry development).
 | Link | Crazyradio PA, Crazyradio 2.0 |
 | Host OS | Linux and macOS (Windows experimental) |
 | Commands | takeoff, land, emergency, move, rotate, stop, hover, battery/height queries |
-| Positioning | Required (`:flow`, `:lighthouse`, or `:loco`) |
+| Positioning | Required (`:flow`, `:lighthouse`, or `:loco`; validated at connect) |
 | Process model | One Crazyflie per adapter / vehicle process |
+| Telemetry | Mock + radio report battery/estimator via CRTP logging (`pm.batteryLevel`, `sys.canfly`) |
 
 **Not in this release:** BLE, direct Crazyflie USB flight control, raw attitude
-setpoints, trajectory upload, parameter editing, firmware flashing, log-block
-customization, and multi-Crazyflie swarms.
+setpoints, trajectory upload, parameter editing, firmware flashing, arbitrary
+log-block customization beyond the built-in readiness subscription, and
+multi-Crazyflie swarms.
 
 ## Mock connection (no hardware)
 
@@ -77,17 +79,30 @@ radio://<radio_index>/<channel>/<datarate>/<address>?safelink=1&timeout=1000
 - `channel` — 0–125 (Crazyradio 2.0: 0–100)
 - `datarate` — `250K`, `1M`, or `2M`
 - `address` — 5-byte hex radio address (default `E7E7E7E7E7`)
+- `safelink=1` — negotiate Bitcraze SafeLink on open (default off)
+- `timeout` — USB bulk timeout in milliseconds
 
 ## Positioning and readiness
 
 High-level position commands need a working estimator (Flow Deck, Lighthouse,
-or Loco Positioning). The adapter readiness gate checks:
+or Loco Positioning). Pass `positioning: :flow | :lighthouse | :loco` (default
+`:flow`). Unknown values fail at connect with
+`{:error, {:unsupported_positioning, value}}`.
 
-- battery above the takeoff threshold
-- `estimator_ready`
-- recent telemetry
+The adapter readiness gate (takeoff, land, move, rotate) checks:
 
-Safety policies can also enforce:
+- transport-reported battery (reject when unknown or below 15%)
+- `estimator_ready == true` (reject when unknown/false)
+- a non-nil telemetry timestamp
+
+Emergency bypasses the readiness gate.
+
+On connect, the session downloads the logging TOC and starts a block for
+`pm.batteryLevel` (or `pm.vbat`) plus `sys.canfly`. Radio `telemetry/1` reads
+that cache; until the first log-data packet arrives, battery/estimator stay
+`nil` and motion commands fail closed with `:telemetry_unavailable`.
+
+Safety policies can also enforce the same gates for motion commands:
 
 ```elixir
 Drone.connect(:crazyflie,
@@ -99,6 +114,8 @@ Drone.connect(:crazyflie,
   ]
 )
 ```
+
+When `max_telemetry_age_ms` is set, a missing `telemetry_at` is treated as stale.
 
 ## Units
 
@@ -157,7 +174,8 @@ commander (`TAKEOFF_2`, `LAND_2`, `GO_TO_2`).
 | `:usb_backend_unavailable` | No `usb_backend` module for `radio://` |
 | `:crazyradio_not_found` | Dongle missing / permissions |
 | `:estimator_not_ready` | Flow/Lighthouse/Loco not converged |
-| `:stale_telemetry` | Link stalled; check radio and polling |
+| `:stale_telemetry` | Telemetry timestamp missing/old when age limit is set |
+| `:telemetry_unavailable` | Radio transport has no battery/estimator snapshot yet |
 | `:link_lost` / `:no_ack` | Out of range, wrong channel/address, or unplug |
 | Mission `{:unsupported_command, :flip}` | Capability preflight rejected flip |
 

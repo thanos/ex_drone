@@ -46,4 +46,29 @@ defmodule Drone.Safety.CrazyflieExtrasTest do
 
     assert {:ok, _} = Safety.check(Command.move(:forward, 50), policy, state)
   end
+
+  test "rejects motion when telemetry_at is missing and age limit is set" do
+    policy = Policy.new(max_telemetry_age_ms: 100)
+
+    state = %{
+      mode: :flying,
+      flying: true,
+      x: 0,
+      y: 0,
+      z: 50,
+      yaw: 0,
+      battery: 100
+    }
+
+    assert {:error, :safety, :stale_telemetry} =
+             Safety.check(Command.move(:forward, 50), policy, state)
+  end
+
+  test "takeoff altitude uses takeoff_height_cm from vehicle state" do
+    policy = Policy.new(max_altitude_cm: 100)
+    state = %{mode: :sdk_mode, flying: false, battery: 100, takeoff_height_cm: 200}
+
+    assert {:error, :safety, :max_altitude} =
+             Safety.check(Command.takeoff(), policy, state)
+  end
 end

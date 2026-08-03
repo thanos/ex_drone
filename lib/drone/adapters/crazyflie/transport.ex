@@ -156,6 +156,36 @@ defmodule Drone.Adapters.Crazyflie.Transport do
   @callback close(state()) :: :ok
 
   @doc """
+  Optional snapshot of transport-reported vehicle telemetry.
+
+  Used by the Crazyflie adapter instead of inspecting transport structs.
+  Keys may include `:battery`, `:estimator_ready`, `:flying`, `:armed`,
+  `:firmware`, `:serial_number`, and `:link_quality`. Missing keys leave
+  adapter fields unchanged. Use `nil` explicitly when a value is unknown
+  (for example radio transports without a logging subscription).
+
+  ## Example implementation
+
+      @impl Drone.Adapters.Crazyflie.Transport
+      def telemetry(state) do
+        {:ok,
+         %{
+           battery: state.battery_percent,
+           estimator_ready: state.estimator_ready,
+           flying: state.flying,
+           armed: state.armed,
+           firmware: "mock",
+           serial_number: "mock-cf"
+         }, state}
+      end
+  """
+  @callback telemetry(state()) ::
+              {:ok, map(), state()}
+              | {:error, term(), state()}
+
+  @optional_callbacks [telemetry: 1]
+
+  @doc """
   Resolves a transport module from options or a parsed link URI.
 
   Selection order:

@@ -6,35 +6,16 @@ defmodule Drone.Adapters.Crazyflie.SessionTransportMockTest do
   alias Drone.Adapters.Crazyflie.CRTP
   alias Drone.Adapters.Crazyflie.Platform
   alias Drone.Adapters.Crazyflie.Session
+  alias Drone.Adapters.Crazyflie.Transport.Mock
 
   setup :verify_on_exit!
 
-  test "connect handshake succeeds through transport mock" do
-    expect(Drone.CrazyflieTransportMock, :open, fn _opts -> {:ok, :transport} end)
-
-    expect(Drone.CrazyflieTransportMock, :send, 2, fn :transport, packet ->
-      payload =
-        if packet.port == Platform.get_protocol_version().port and
-             packet.channel == Platform.get_protocol_version().channel do
-          <<0, 8>>
-        else
-          "Bitcraze Crazyflie"
-        end
-
-      {:ok, %{acked: true, retries: 0, payload: payload}, :transport}
-    end)
-
-    assert {:ok, session} = Session.connect(Drone.CrazyflieTransportMock, [])
+  test "connect handshake and logging succeed on mock transport" do
+    assert {:ok, session} = Session.connect(Mock, uri: "mock://ready")
     assert session.protocol_version == 8
-
-    expect(Drone.CrazyflieTransportMock, :send, fn :transport, packet ->
-      assert CRTP.null?(packet)
-      {:ok, %{acked: true, retries: 0, payload: <<>>}, :transport}
-    end)
+    assert [_, _] = session.log_layout
 
     assert {:ok, _ack, session} = Session.poll(session)
-
-    expect(Drone.CrazyflieTransportMock, :close, fn :transport -> :ok end)
     assert :ok = Session.close(session)
   end
 
@@ -64,17 +45,9 @@ defmodule Drone.Adapters.Crazyflie.SessionTransportMockTest do
   end
 
   test "send_packet propagates transport errors" do
-    expect(Drone.CrazyflieTransportMock, :open, fn _ -> {:ok, :transport} end)
-
-    expect(Drone.CrazyflieTransportMock, :send, 2, fn :transport, _packet ->
-      {:ok, %{acked: true, retries: 0, payload: <<0, 8>>}, :transport}
-    end)
-
-    {:ok, session} = Session.connect(Drone.CrazyflieTransportMock, [])
-
-    expect(Drone.CrazyflieTransportMock, :send, fn :transport, _ ->
-      {:error, :link_lost, :transport}
-    end)
+    assert {:ok, session} = Session.connect(Mock, uri: "mock://ready")
+    ts = Mock.force_unplug(session.transport_state)
+    session = %{session | transport_state: ts}
 
     assert {:error, :link_lost, _} = Session.send_packet(session, CRTP.null_packet())
   end

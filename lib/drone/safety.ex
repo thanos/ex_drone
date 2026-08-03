@@ -13,7 +13,7 @@ defmodule Drone.Safety do
   Emergency commands bypass all safety checks.
   """
 
-  alias Drone.{Command, Error, Safety.Geofence, Safety.Policy}
+  alias Drone.{Command, Error, Geometry, Safety.Geofence, Safety.Policy}
 
   @typedoc """
   Safety rejection reasons (same set as `t:Drone.Error.safety_reason/0`).
@@ -232,10 +232,11 @@ defmodule Drone.Safety do
 
   defp validate_estimator(%Command{type: type}, %Policy{require_estimator: true}, state)
        when type in [:takeoff, :move, :rotate, :land] do
-    case Map.get(state, :estimator_ready, true) do
+    case Map.get(state, :estimator_ready) do
       true -> :ok
       false -> Error.safety(:estimator_not_ready)
-      _ -> :ok
+      # Missing or unknown: fail closed when the policy requires an estimator.
+      _ -> Error.safety(:estimator_not_ready)
     end
   end
 
@@ -258,9 +259,8 @@ defmodule Drone.Safety do
         end
 
       _ ->
-        # Adapters that do not report telemetry timestamps are treated as fresh
-        # (Sim / Tello dead-reckoning).
-        :ok
+        # When a max age is configured, missing timestamps are stale.
+        Error.safety(:stale_telemetry)
     end
   end
 
@@ -297,8 +297,8 @@ defmodule Drone.Safety do
 
   defp validate_altitude(%Command{type: :takeoff}, %Policy{max_altitude_cm: nil}, _state), do: :ok
 
-  defp validate_altitude(%Command{type: :takeoff}, %Policy{max_altitude_cm: max_z}, _state) do
-    takeoff_height = 30
+  defp validate_altitude(%Command{type: :takeoff}, %Policy{max_altitude_cm: max_z}, state) do
+    takeoff_height = Map.get(state, :takeoff_height_cm, 30)
 
     if takeoff_height <= max_z do
       :ok
@@ -320,15 +320,8 @@ defmodule Drone.Safety do
        ) do
     distance = Keyword.get(args, :distance, 0)
     direction = Keyword.get(args, :direction)
-
-    {dx, dy} =
-      case direction do
-        :forward -> {0, distance}
-        :back -> {0, -distance}
-        :left -> {-distance, 0}
-        :right -> {distance, 0}
-        _ -> {0, 0}
-      end
+    yaw = state[:yaw] || 0
+    {dx, dy, _dz} = Geometry.move_delta(direction, distance, yaw)
 
     new_x = (state[:x] || 0) + dx
     new_y = (state[:y] || 0) + dy
@@ -370,15 +363,8 @@ defmodule Drone.Safety do
        ) do
     distance = Keyword.get(args, :distance, 0)
     direction = Keyword.get(args, :direction)
-
-    {dx, dy} =
-      case direction do
-        :forward -> {0, distance}
-        :back -> {0, -distance}
-        :left -> {-distance, 0}
-        :right -> {distance, 0}
-        _ -> {0, 0}
-      end
+    yaw = state[:yaw] || 0
+    {dx, dy, _dz} = Geometry.move_delta(direction, distance, yaw)
 
     new_x = (state[:x] || 0) + dx
     new_y = (state[:y] || 0) + dy

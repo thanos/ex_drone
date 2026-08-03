@@ -9,21 +9,9 @@ defmodule Drone.Adapters.Crazyflie.Transport.Mock do
   * `:low_battery` — reports low battery percent
   * `:unplug` — next send fails with `:link_lost`
 
-  Simulates link probe, protocol version, supervisor, and high-level commander
-  replies so `Session.connect/2` and adapter commands work without hardware.
-
-  ## Examples
-
-      {:ok, state} =
-        Drone.Adapters.Crazyflie.Transport.Mock.open(uri: "mock://ready")
-
-      {:ok, %{acked: true}, state} =
-        Drone.Adapters.Crazyflie.Transport.Mock.send(
-          state,
-          Drone.Adapters.Crazyflie.CRTP.null_packet()
-        )
-
-      :ok = Drone.Adapters.Crazyflie.Transport.Mock.close(state)
+  Simulates link probe, protocol version, logging TOC/control/data,
+  supervisor, and high-level commander replies so `Session.connect/2`
+  and adapter commands work without hardware.
   """
 
   @behaviour Drone.Adapters.Crazyflie.Transport
@@ -31,33 +19,21 @@ defmodule Drone.Adapters.Crazyflie.Transport.Mock do
   alias Drone.Adapters.Crazyflie.CRTP
   alias Drone.Adapters.Crazyflie.CRTP.Ports
   alias Drone.Adapters.Crazyflie.LinkURI
+  alias Drone.Adapters.Crazyflie.Logging
+
+  @linkctrl Ports.port(:linkctrl)
+  @platform Ports.port(:platform)
+  @logging Ports.port(:logging)
+  @supervisor Ports.port(:supervisor)
+  @setpoint_hl Ports.port(:setpoint_hl)
+
+  @toc [
+    %{id: 0, type: 1, group: "pm", name: "batteryLevel"},
+    %{id: 1, type: 1, group: "sys", name: "canfly"}
+  ]
 
   @typedoc """
   In-memory mock radio / Crazyflie state.
-
-  | Field | Type | Meaning |
-  | --- | --- | --- |
-  | `:profile` | `atom()` | Active mock profile |
-  | `:protocol_version` | `integer()` | Version returned to platform queries |
-  | `:battery_percent` | `integer()` | Reported battery |
-  | `:estimator_ready` | `boolean()` | Takeoff gate |
-  | `:armed` | `boolean()` | Supervisor arm flag |
-  | `:flying` | `boolean()` | After successful takeoff |
-  | `:x`, `:y`, `:z` | `float()` | Position in **meters** |
-  | `:yaw` | `float()` | Yaw in **radians** |
-  | `:unplugged` | `boolean()` | When true, `send/2` returns `:link_lost` |
-  | `:sent` | `[CRTP.packet()]` | Packets observed (newest first) |
-
-  ## Example
-
-      %Drone.Adapters.Crazyflie.Transport.Mock{
-        profile: :ready,
-        protocol_version: 8,
-        battery_percent: 95,
-        estimator_ready: true,
-        flying: false,
-        z: 0.0
-      }
   """
   @type t :: %__MODULE__{
           profile: atom() | nil,
@@ -71,7 +47,10 @@ defmodule Drone.Adapters.Crazyflie.Transport.Mock do
           z: float(),
           yaw: float(),
           unplugged: boolean(),
-          sent: [CRTP.packet()]
+          sent: [CRTP.packet()],
+          log_layout: [Logging.layout_entry()] | nil,
+          log_block_id: byte() | nil,
+          logging_started: boolean()
         }
 
   defstruct [
@@ -86,26 +65,14 @@ defmodule Drone.Adapters.Crazyflie.Transport.Mock do
     z: 0.0,
     yaw: 0.0,
     unplugged: false,
-    sent: []
+    sent: [],
+    log_layout: nil,
+    log_block_id: nil,
+    logging_started: false
   ]
 
   @doc """
   Opens a mock transport with a profile from opts or URI.
-
-  ## Parameters
-
-    * `opts` (`keyword()`) — `:uri` (`"mock://ready"`), or `:mock_profile`
-
-  ## Returns
-
-  `{:ok, t()}`.
-
-  ## Examples
-
-      {:ok, state} =
-        Drone.Adapters.Crazyflie.Transport.Mock.open(uri: "mock://low_battery")
-
-      10 = state.battery_percent
   """
   @impl true
   def open(opts) do
@@ -120,71 +87,67 @@ defmodule Drone.Adapters.Crazyflie.Transport.Mock do
 
   @doc """
   Handles CRTP packets and returns synthetic ACKs.
-
-  Recognizes null, linkctrl probe, platform version, supervisor, and
-  high-level commander packets. Unknown packets ACK with an empty payload.
-
-  ## Parameters
-
-    * `state` (`t:t/0`) — mock state
-    * `packet` (`CRTP.packet()`) — packet to process
-
-  ## Returns
-
-  `Drone.Adapters.Crazyflie.Transport.send_result()`.
-
-  ## Examples
-
-      {:ok, %{payload: <<0, 8>>}, state} =
-        Drone.Adapters.Crazyflie.Transport.Mock.send(
-          state,
-          Drone.Adapters.Crazyflie.Platform.get_protocol_version()
-        )
   """
   @impl true
   def send(%__MODULE__{unplugged: true} = state, _packet) do
     {:error, :link_lost, state}
   end
 
-  def send(%__MODULE__{} = state, %{port: port, channel: channel, payload: payload} = packet) do
-    state = %{state | sent: [packet | state.sent]}
+  def send(%__MODULE__{} = state, packet) do
+    state = %{state | sent: Enum.take([packet | state.sent], 32)}
 
-    cond do
-      CRTP.null?(packet) ->
-        {:ok, %{acked: true, retries: 0, payload: <<>>}, state}
-
-      port == Ports.port(:linkctrl) and channel == 1 ->
-        reply = "Bitcraze Crazyflie"
-        {:ok, %{acked: true, retries: 0, payload: reply}, state}
-
-      port == Ports.port(:platform) and channel == 1 ->
-        reply = <<0, state.protocol_version>>
-        {:ok, %{acked: true, retries: 0, payload: reply}, state}
-
-      port == Ports.port(:supervisor) ->
-        handle_supervisor(state, payload)
-
-      port == Ports.port(:setpoint_hl) ->
-        handle_commander(state, payload)
-
-      true ->
-        {:ok, %{acked: true, retries: 0, payload: <<>>}, state}
+    if CRTP.null?(packet) do
+      handle_null(state)
+    else
+      dispatch_port(state, packet.port, packet.channel, packet.payload)
     end
   end
 
+  defp dispatch_port(state, @linkctrl, 1, _payload) do
+    {:ok, %{acked: true, retries: 0, payload: "Bitcraze Crazyflie"}, state}
+  end
+
+  defp dispatch_port(state, @platform, 1, _payload) do
+    {:ok, %{acked: true, retries: 0, payload: <<0, state.protocol_version>>}, state}
+  end
+
+  defp dispatch_port(state, @logging, 0, payload), do: handle_toc(state, payload)
+  defp dispatch_port(state, @logging, 1, payload), do: handle_log_control(state, payload)
+  defp dispatch_port(state, @supervisor, _channel, payload), do: handle_supervisor(state, payload)
+  defp dispatch_port(state, @setpoint_hl, _channel, payload), do: handle_commander(state, payload)
+  defp dispatch_port(state, _port, _channel, _payload), do: {:ok, ack(), state}
+
   @doc """
   Closes the mock transport (no resources to release).
-
-  ## Parameters
-
-    * `state` (`t:t/0`)
-
-  ## Returns
-
-  Always `:ok`.
   """
   @impl true
   def close(%__MODULE__{}), do: :ok
+
+  @doc """
+  Returns simulated battery / estimator / flight flags for the adapter.
+  """
+  @impl true
+  def telemetry(%__MODULE__{} = state) do
+    {:ok,
+     %{
+       battery: state.battery_percent,
+       estimator_ready: state.estimator_ready,
+       flying: state.flying,
+       armed: state.armed,
+       firmware: "mock",
+       serial_number: "mock-cf",
+       link_quality: if(state.unplugged, do: 0, else: 100)
+     }, state}
+  end
+
+  @doc false
+  def configure_logging(%__MODULE__{} = state, layout, block_id)
+      when is_list(layout) and is_integer(block_id) do
+    %{state | log_layout: layout, log_block_id: block_id, logging_started: true}
+  end
+
+  @doc false
+  def ingest_ack_payload(%__MODULE__{} = state, _payload), do: state
 
   @doc false
   def force_unplug(%__MODULE__{} = state), do: %{state | unplugged: true}
@@ -209,6 +172,60 @@ defmodule Drone.Adapters.Crazyflie.Transport.Mock do
   defp apply_profile(state, :low_battery), do: %{state | battery_percent: 10}
   defp apply_profile(state, :unplug), do: %{state | unplugged: true}
   defp apply_profile(state, _), do: %{state | estimator_ready: true, battery_percent: 95}
+
+  defp handle_null(%__MODULE__{logging_started: true} = state) do
+    canfly = if state.estimator_ready, do: 1, else: 0
+    block_id = state.log_block_id || 0
+    log_payload = <<block_id, 0, 0, 0, state.battery_percent, canfly>>
+
+    {:ok, encoded} =
+      CRTP.encode(%{
+        port: Ports.port(:logging),
+        channel: Logging.data_channel(),
+        payload: log_payload
+      })
+
+    {:ok, %{acked: true, retries: 0, payload: encoded}, state}
+  end
+
+  defp handle_null(state), do: {:ok, ack(), state}
+
+  defp handle_toc(state, <<0x03>>) do
+    count = length(@toc)
+    reply = <<0x03, count::little-16, 0xAABBCCDD::little-32, 16, 128>>
+    {:ok, %{acked: true, retries: 0, payload: reply}, state}
+  end
+
+  defp handle_toc(state, <<0x02, id::little-16>>) do
+    case Enum.find(@toc, &(&1.id == id)) do
+      nil ->
+        {:ok, %{acked: true, retries: 0, payload: <<0x02>>}, state}
+
+      item ->
+        reply =
+          <<0x02, item.id::little-16, item.type, item.group::binary, 0, item.name::binary, 0>>
+
+        {:ok, %{acked: true, retries: 0, payload: reply}, state}
+    end
+  end
+
+  defp handle_toc(state, _), do: {:ok, ack(), state}
+
+  defp handle_log_control(state, <<0x05>>) do
+    {:ok, %{acked: true, retries: 0, payload: <<0x05, 0, 0>>}, %{state | logging_started: false}}
+  end
+
+  defp handle_log_control(state, <<0x06, block_id, _ops::binary>>) do
+    {:ok, %{acked: true, retries: 0, payload: <<0x06, block_id, 0>>},
+     %{state | log_block_id: block_id}}
+  end
+
+  defp handle_log_control(state, <<0x08, block_id, _period::little-16>>) do
+    {:ok, %{acked: true, retries: 0, payload: <<0x08, block_id, 0>>},
+     %{state | log_block_id: block_id, logging_started: true}}
+  end
+
+  defp handle_log_control(state, _), do: {:ok, ack(), state}
 
   defp handle_supervisor(state, <<0>>), do: {:ok, ack(), %{state | armed: true}}
   defp handle_supervisor(state, <<1>>), do: {:ok, ack(), %{state | armed: false, flying: false}}
@@ -239,14 +256,14 @@ defmodule Drone.Adapters.Crazyflie.Transport.Mock do
          <<12, _g, relative, _linear, x::little-float-32, y::little-float-32, z::little-float-32,
            yaw::little-float-32, _dur::little-float-32>>
        ) do
-    {nx, ny, nz} =
+    {nx, ny, nz, nyaw} =
       if relative == 1 do
-        {state.x + x, state.y + y, state.z + z}
+        {state.x + x, state.y + y, state.z + z, state.yaw + yaw}
       else
-        {x, y, z}
+        {x, y, z, yaw}
       end
 
-    {:ok, ack(), %{state | x: nx, y: ny, z: nz, yaw: yaw}}
+    {:ok, ack(), %{state | x: nx, y: ny, z: nz, yaw: nyaw}}
   end
 
   defp handle_commander(state, _), do: {:ok, ack(), state}
