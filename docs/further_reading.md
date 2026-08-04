@@ -12,6 +12,7 @@ background and next steps.
 | Guide | Topic |
 |-------|-------|
 | [Getting Started](getting_started.md) | Install, first simulator flight, Tello connect |
+| [Connecting to Hardware](connecting.md) | Step-by-step Tello Wi-Fi and Crazyflie Crazyradio |
 | [Safety](safety.md) | Policies, geofencing, allowlists, emergency |
 | [Simulator](simulator.md) | In-process adapter, battery, failure injection, initial pose |
 | [Tello](tello.md) | DJI Tello / Tello EDU UDP adapter |

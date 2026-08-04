@@ -50,6 +50,7 @@ defmodule Drone.MixProject do
         "README.md",
         "CHANGELOG.md",
         "docs/getting_started.md": [title: "Getting Started"],
+        "docs/connecting.md": [title: "Connecting to Hardware"],
         "docs/safety.md": [title: "Safety"],
         "docs/simulator.md": [title: "Simulator"],
         "docs/tello.md": [title: "Tello"],
@@ -73,6 +74,7 @@ defmodule Drone.MixProject do
       groups_for_extras: [
         Guides: [
           "docs/getting_started.md",
+          "docs/connecting.md",
           "docs/safety.md",
           "docs/simulator.md",
           "docs/tello.md",

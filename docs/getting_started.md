@@ -115,6 +115,7 @@ For Crazyradio hardware, pass a `usb_backend` implementing
 
 ## Next Steps
 
+- [Connecting to Hardware](connecting.md) — Tello Wi-Fi and Crazyflie Crazyradio
 - [Safety](safety.md) — policies, geofencing, allowlists
 - [Simulator](simulator.md) — failure injection and initial pose
 - [Crazyflie](crazyflie.md) — radio URIs, logging, SafeLink, readiness

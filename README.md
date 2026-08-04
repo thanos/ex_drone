@@ -105,7 +105,7 @@ Drone.land(drone)
 Drone.disconnect(drone)
 ```
 
-See the [Tello guide](docs/tello.md).
+See [Connecting to Hardware](docs/connecting.md) and the [Tello guide](docs/tello.md).
 
 ## Crazyflie Connection
 
@@ -125,7 +125,8 @@ Drone.disconnect(drone)
 ```
 
 Use `mock://` without hardware. Real Crazyradio links need a `usb_backend`
-implementing `Drone.Adapters.Crazyflie.USB`. See the [Crazyflie guide](docs/crazyflie.md)
+implementing `Drone.Adapters.Crazyflie.USB`. See
+[Connecting to Hardware](docs/connecting.md), the [Crazyflie guide](docs/crazyflie.md),
 and `examples/crazyflie_mock_flight.exs`.
 
 ```shell
@@ -165,6 +166,7 @@ See the [Architecture guide](docs/architecture.md).
 ### Guides
 
 - [Getting Started](docs/getting_started.md)
+- [Connecting to Hardware](docs/connecting.md)
 - [Safety](docs/safety.md)
 - [Simulator](docs/simulator.md)
 - [Tello](docs/tello.md)
